@@ -21,6 +21,7 @@
 #include "foc.h"
 #include "trajectory.h"
 #include "pid.h"
+#include "app_build_config.h"
 
 #include "axis_state.h"
 #include "fault.h"
@@ -44,7 +45,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define APP_SAFE_INTEGRATION 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/

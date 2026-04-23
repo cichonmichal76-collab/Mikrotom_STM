@@ -27,10 +27,19 @@ void Telemetry_Sample(const TelemetrySample_t *in)
 
 static uint8_t telemetry_pop(TelemetrySample_t *out)
 {
-    if ((out == 0) || (g_count == 0u)) return 0u;
+    if (out == 0) return 0u;
+
+    __disable_irq();
+    if (g_count == 0u)
+    {
+        __enable_irq();
+        return 0u;
+    }
+
     *out = g_buf[g_tail];
     g_tail = (uint16_t)((g_tail + 1u) % TELEMETRY_BUFFER_SIZE);
     g_count--;
+    __enable_irq();
     return 1u;
 }
 

@@ -63,7 +63,19 @@ void MotorState_Init(MotorState *s){
 }
 
 void MotorState_Update(MotorState *s, TIM_HandleTypeDef *EncoderTimer, float dt_s){
-    int32_t cnt = (s->encoder_ext << 16) | (int32_t)__HAL_TIM_GET_COUNTER(EncoderTimer);
+    int32_t ext_before;
+    int32_t ext_after;
+    uint32_t counter;
+    int32_t cnt;
+
+    do
+    {
+        ext_before = s->encoder_ext;
+        counter = __HAL_TIM_GET_COUNTER(EncoderTimer);
+        ext_after = s->encoder_ext;
+    } while (ext_before != ext_after);
+
+    cnt = (ext_after << 16) | (int32_t)counter;
 
     s->pos_prev_m = s->pos_m;
     s->pos_um = (float)cnt;

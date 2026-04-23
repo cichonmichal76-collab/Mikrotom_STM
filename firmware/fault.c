@@ -11,6 +11,22 @@ static uint32_t fault_to_mask(FaultCode_t code)
     return (1UL << ((uint32_t)code - 1UL));
 }
 
+static FaultCode_t fault_pick_reported(uint32_t mask)
+{
+    int32_t code;
+
+    if (mask == 0u) return FAULT_NONE;
+
+    for (code = (int32_t)FAULT_ESTOP; code >= (int32_t)FAULT_OVERCURRENT; code--)
+    {
+        FaultCode_t fault = (FaultCode_t)code;
+        if ((mask & fault_to_mask(fault)) != 0u)
+            return fault;
+    }
+
+    return FAULT_NONE;
+}
+
 void Fault_Init(void){ g_fault_mask = 0u; g_last_fault = FAULT_NONE; }
 
 void Fault_Set(FaultCode_t code)
@@ -27,7 +43,7 @@ void Fault_Clear(FaultCode_t code)
     if (code == FAULT_NONE) return;
     g_fault_mask &= ~fault_to_mask(code);
     EventLog_Push(EVT_FAULT_CLEAR, (int32_t)code);
-    if (g_fault_mask == 0u) g_last_fault = FAULT_NONE;
+    g_last_fault = fault_pick_reported(g_fault_mask);
 }
 
 void Fault_ClearAll(void)

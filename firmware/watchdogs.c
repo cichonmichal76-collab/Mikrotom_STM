@@ -24,7 +24,6 @@ void Watchdogs_KickComm(void)
     {
         g_watchdogs.comm_timeout_active = 0u;
         Fault_Clear(FAULT_COMM_TIMEOUT);
-        EventLog_Push(EVT_FAULT_CLEAR, (int32_t)FAULT_COMM_TIMEOUT);
     }
 }
 
@@ -39,7 +38,6 @@ void Watchdogs_Update(void)
             g_watchdogs.comm_timeout_active = 1u;
             Fault_Set(FAULT_COMM_TIMEOUT);
             EventLog_Push(EVT_COMM_TIMEOUT, (int32_t)dt);
-            AxisState_Set(AXIS_SAFE);
             Commissioning_SetControlledMotion(0u);
         }
     }

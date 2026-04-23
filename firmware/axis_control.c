@@ -8,6 +8,7 @@
 #include "eventlog.h"
 #include "motorState.h"
 #include "trajectory.h"
+#include "app_build_config.h"
 
 extern volatile MotorState state;
 extern volatile MotorTrajectory traj;
@@ -26,6 +27,7 @@ void AxisControl_Init(void){}
 uint8_t AxisControl_RunAllowed(void)
 {
     if (!axis_preconditions_ok()) return 0u;
+    if (!state.enabled) return 0u;
     if (!Commissioning_ControlledMotion()) return 0u;
     return 1u;
 }
@@ -66,6 +68,9 @@ uint8_t AxisControl_QStop(void)
 
 uint8_t AxisControl_MoveRelUm(int32_t delta_um)
 {
+#if !APP_MOTION_IMPLEMENTED
+    return 0u;
+#else
     int32_t current_pos = (int32_t)state.pos_um;
     int32_t target = current_pos + delta_um;
     if (!AxisControl_RunAllowed()) return 0u;
@@ -83,10 +88,14 @@ uint8_t AxisControl_MoveRelUm(int32_t delta_um)
 
     AxisState_Set(AXIS_MOTION);
     return 1u;
+#endif
 }
 
 uint8_t AxisControl_MoveAbsUm(int32_t target_um)
 {
+#if !APP_MOTION_IMPLEMENTED
+    return 0u;
+#else
     if (!AxisControl_RunAllowed()) return 0u;
     if (!Limits_IsMoveAbsAllowed(target_um)) return 0u;
     target_um = Limits_ClampPositionUm(target_um);
@@ -102,6 +111,7 @@ uint8_t AxisControl_MoveAbsUm(int32_t target_um)
 
     AxisState_Set(AXIS_MOTION);
     return 1u;
+#endif
 }
 
 void AxisControl_UpdateRt(void)
@@ -116,7 +126,6 @@ void AxisControl_UpdateRt(void)
 
     if (!AxisControl_RunAllowed())
     {
-        state.enabled = 0u;
         traj.traj_done = 1;
         return;
     }

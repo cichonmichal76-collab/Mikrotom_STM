@@ -17,13 +17,21 @@
 #include <string.h>
 
 #define PROTOCOL_RX_BUFFER_SIZE 128u
+#define PROTOCOL_CMD_QUEUE_DEPTH 4u
+
+#define PROTOCOL_PENDING_ERR_RX_OVERFLOW (1u << 0)
+#define PROTOCOL_PENDING_ERR_CMD_OVERFLOW (1u << 1)
 
 extern volatile MotorState state;
 
 static uint8_t g_rx_byte = 0u;
 static char g_rx_buffer[PROTOCOL_RX_BUFFER_SIZE];
+static char g_cmd_queue[PROTOCOL_CMD_QUEUE_DEPTH][PROTOCOL_RX_BUFFER_SIZE];
 static uint16_t g_rx_index = 0u;
-static uint8_t g_cmd_ready = 0u;
+static volatile uint8_t g_cmd_head = 0u;
+static volatile uint8_t g_cmd_tail = 0u;
+static volatile uint8_t g_cmd_count = 0u;
+static volatile uint8_t g_pending_errors = 0u;
 
 uint8_t Protocol_GetLastRxByte(void){ return g_rx_byte; }
 
@@ -39,11 +47,33 @@ static void protocol_rsp_param_i32(const char *name, int32_t value){ char msg[12
 static void protocol_rsp_param_u32(const char *name, uint32_t value){ char msg[128]; snprintf(msg,sizeof(msg),"RSP,PARAM,%s,%lu\n",name,(unsigned long)value); Protocol_SendLine(msg); }
 static void protocol_rsp_config_u8(const char *name, uint8_t value){ char msg[128]; snprintf(msg,sizeof(msg),"RSP,CONFIG,%s,%u\n",name,(unsigned)value); Protocol_SendLine(msg); }
 
+static void protocol_queue_error(uint8_t err_mask)
+{
+    g_pending_errors |= err_mask;
+}
+
+static void protocol_queue_completed_command(void)
+{
+    if (g_cmd_count >= PROTOCOL_CMD_QUEUE_DEPTH)
+    {
+        protocol_queue_error(PROTOCOL_PENDING_ERR_CMD_OVERFLOW);
+        return;
+    }
+
+    memcpy(g_cmd_queue[g_cmd_head], g_rx_buffer, (size_t)g_rx_index + 1u);
+    g_cmd_head = (uint8_t)((g_cmd_head + 1u) % PROTOCOL_CMD_QUEUE_DEPTH);
+    g_cmd_count++;
+}
+
 void Protocol_Init(void)
 {
     g_rx_index = 0u;
-    g_cmd_ready = 0u;
+    g_cmd_head = 0u;
+    g_cmd_tail = 0u;
+    g_cmd_count = 0u;
+    g_pending_errors = 0u;
     memset(g_rx_buffer, 0, sizeof(g_rx_buffer));
+    memset(g_cmd_queue, 0, sizeof(g_cmd_queue));
     HAL_UART_Receive_IT(&huart2, &g_rx_byte, 1);
 }
 
@@ -54,7 +84,7 @@ void Protocol_RxCpltCallback(uint8_t byte)
         if (g_rx_index > 0u)
         {
             g_rx_buffer[g_rx_index] = '\0';
-            g_cmd_ready = 1u;
+            protocol_queue_completed_command();
         }
         g_rx_index = 0u;
     }
@@ -65,7 +95,7 @@ void Protocol_RxCpltCallback(uint8_t byte)
         else
         {
             g_rx_index = 0u;
-            protocol_rsp_err("RX_OVERFLOW");
+            protocol_queue_error(PROTOCOL_PENDING_ERR_RX_OVERFLOW);
         }
     }
     HAL_UART_Receive_IT(&huart2, &g_rx_byte, 1);
@@ -272,14 +302,32 @@ static void handle_cmd(const char *arg1, const char *arg2)
 
 void Protocol_Process(void)
 {
-    if (!g_cmd_ready) return;
-    g_cmd_ready = 0u;
-
+    uint8_t pending_errors;
     char local_buf[PROTOCOL_RX_BUFFER_SIZE];
     char *cmd, *arg1, *arg2, *arg3;
 
+    __disable_irq();
+    pending_errors = g_pending_errors;
+    g_pending_errors = 0u;
+    __enable_irq();
+
+    if ((pending_errors & PROTOCOL_PENDING_ERR_RX_OVERFLOW) != 0u)
+        protocol_rsp_err("RX_OVERFLOW");
+    if ((pending_errors & PROTOCOL_PENDING_ERR_CMD_OVERFLOW) != 0u)
+        protocol_rsp_err("CMD_OVERFLOW");
+
+    __disable_irq();
+    if (g_cmd_count == 0u)
+    {
+        __enable_irq();
+        return;
+    }
+
     memset(local_buf, 0, sizeof(local_buf));
-    strncpy(local_buf, g_rx_buffer, sizeof(local_buf) - 1u);
+    strncpy(local_buf, g_cmd_queue[g_cmd_tail], sizeof(local_buf) - 1u);
+    g_cmd_tail = (uint8_t)((g_cmd_tail + 1u) % PROTOCOL_CMD_QUEUE_DEPTH);
+    g_cmd_count--;
+    __enable_irq();
 
     cmd = strtok(local_buf, " ");
     arg1 = strtok(NULL, " ");

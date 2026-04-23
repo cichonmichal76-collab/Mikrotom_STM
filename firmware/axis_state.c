@@ -21,6 +21,7 @@ const char* AxisState_Name(AxisState_t state)
     {
         case AXIS_BOOT: return "BOOT";
         case AXIS_SAFE: return "SAFE";
+        case AXIS_CONFIG: return "CONFIG";
         case AXIS_CALIBRATION: return "CALIBRATION";
         case AXIS_READY: return "READY";
         case AXIS_ARMED: return "ARMED";

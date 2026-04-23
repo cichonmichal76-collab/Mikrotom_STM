@@ -13,6 +13,7 @@ uint8_t Commissioning_GetStage(void);
 uint8_t Commissioning_SafeMode(void);
 uint8_t Commissioning_ArmingOnly(void);
 uint8_t Commissioning_ControlledMotion(void);
+void Commissioning_Apply(const Commissioning_t *cfg);
 void Commissioning_SetSafeMode(uint8_t en);
 void Commissioning_SetArmingOnly(uint8_t en);
 void Commissioning_SetControlledMotion(uint8_t en);

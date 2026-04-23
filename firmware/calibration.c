@@ -6,6 +6,7 @@
 static Calibration_t g_calib;
 void Calibration_Init(void){ Calibration_LoadDefaults(); }
 void Calibration_LoadDefaults(void){ g_calib.elec_zero_pos_um = 0; g_calib.electrical_pitch_um = 30000.0f; g_calib.sign = 1; g_calib.valid = 0u; }
+void Calibration_Apply(const Calibration_t *cfg){ if (cfg != 0) g_calib = *cfg; }
 void Calibration_SetZeroPosUm(int32_t pos_um){ g_calib.elec_zero_pos_um = pos_um; }
 void Calibration_SetPitchUm(float pitch_um){ g_calib.electrical_pitch_um = pitch_um; }
 void Calibration_SetSign(int8_t sign){ g_calib.sign = (sign >= 0) ? 1 : -1; }

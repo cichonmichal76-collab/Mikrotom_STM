@@ -9,6 +9,7 @@ typedef struct {
 } Calibration_t;
 void Calibration_Init(void);
 void Calibration_LoadDefaults(void);
+void Calibration_Apply(const Calibration_t *cfg);
 void Calibration_SetZeroPosUm(int32_t pos_um);
 void Calibration_SetPitchUm(float pitch_um);
 void Calibration_SetSign(int8_t sign);

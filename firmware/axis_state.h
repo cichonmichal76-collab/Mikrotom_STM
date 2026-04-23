@@ -4,6 +4,7 @@
 typedef enum {
     AXIS_BOOT = 0,
     AXIS_SAFE,
+    AXIS_CONFIG,
     AXIS_CALIBRATION,
     AXIS_READY,
     AXIS_ARMED,

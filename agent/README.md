@@ -35,6 +35,7 @@ The agent keeps its own short recent-events cache so the GUI can request
 - `MIKROTOM_SERIAL_BAUDRATE` default: `115200`
 - `MIKROTOM_SERIAL_READ_TIMEOUT` default: `0.05`
 - `MIKROTOM_COMMAND_TIMEOUT` default: `1.0`
+- `MIKROTOM_HEARTBEAT_INTERVAL_S` default: `0.35`
 - `MIKROTOM_EVENT_CACHE_SIZE` default: `128`
 
 ## Install

@@ -6,4 +6,5 @@ void ConfigStore_Init(void);
 uint8_t ConfigStore_Load(void);
 uint8_t ConfigStore_Save(void);
 void ConfigStore_LoadDefaults(void);
+uint8_t ConfigStore_IsLoaded(void);
 #endif

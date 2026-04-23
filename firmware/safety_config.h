@@ -15,6 +15,7 @@ typedef struct {
 void SafetyConfig_Init(void);
 void SafetyConfig_LoadDefaults(void);
 const SafetyConfig_t* SafetyConfig_Get(void);
+void SafetyConfig_Apply(const SafetyConfig_t *cfg);
 void SafetyConfig_SetBrakeInstalled(uint8_t en);
 void SafetyConfig_SetCollisionInstalled(uint8_t en);
 void SafetyConfig_SetPtcInstalled(uint8_t en);

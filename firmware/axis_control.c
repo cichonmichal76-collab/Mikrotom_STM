@@ -22,6 +22,20 @@ static uint8_t axis_preconditions_ok(void)
     return 1u;
 }
 
+static AxisState_t axis_control_idle_state(void)
+{
+    const SafetyConfig_t *s = SafetyConfig_Get();
+    uint8_t calibration_required = (!Calibration_IsValid() && !s->allow_motion_without_calibration) ? 1u : 0u;
+
+    if (Fault_IsActive()) return AXIS_FAULT;
+    if (calibration_required && !state.enabled) return AXIS_CONFIG;
+    if (Commissioning_SafeMode()) return AXIS_SAFE;
+    if (!state.enabled) return AXIS_SAFE;
+    if (Commissioning_ArmingOnly()) return AXIS_ARMED;
+    if (calibration_required) return AXIS_CONFIG;
+    return AXIS_READY;
+}
+
 void AxisControl_Init(void){}
 
 uint8_t AxisControl_RunAllowed(void)
@@ -36,7 +50,7 @@ uint8_t AxisControl_Enable(void)
 {
     if (Fault_IsActive()) return 0u;
     state.enabled = 1u;
-    AxisState_Set(AXIS_READY);
+    AxisState_Set(axis_control_idle_state());
     EventLog_Push(EVT_ENABLE, 0);
     return 1u;
 }
@@ -114,6 +128,27 @@ uint8_t AxisControl_MoveAbsUm(int32_t target_um)
 #endif
 }
 
+void AxisControl_NotifyConfigChanged(void)
+{
+    AxisState_t current = AxisState_Get();
+
+    if (current == AXIS_FAULT || current == AXIS_MOTION || current == AXIS_STOPPING || current == AXIS_CALIBRATION)
+        return;
+
+    AxisState_Set(AXIS_CONFIG);
+}
+
+void AxisControl_NotifyCalibrationComplete(uint8_t success)
+{
+    if (!success)
+    {
+        AxisState_Set(AXIS_CONFIG);
+        return;
+    }
+
+    AxisState_Set(axis_control_idle_state());
+}
+
 void AxisControl_UpdateRt(void)
 {
     if (Fault_IsActive())
@@ -137,7 +172,12 @@ void AxisControl_UpdateRt(void)
 void AxisControl_BackgroundTask(void)
 {
     if (AxisState_Get() == AXIS_STOPPING)
-        AxisState_Set(AXIS_SAFE);
+        AxisState_Set(axis_control_idle_state());
     if ((AxisState_Get() == AXIS_MOTION) && traj.traj_done)
-        AxisState_Set(AXIS_READY);
+        AxisState_Set(axis_control_idle_state());
+    if (AxisState_Get() == AXIS_CONFIG)
+    {
+        AxisState_t next_state = axis_control_idle_state();
+        if (next_state != AXIS_CONFIG) AxisState_Set(next_state);
+    }
 }

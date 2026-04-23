@@ -12,6 +12,7 @@
 #include "watchdogs.h"
 #include "eventlog.h"
 #include "motorState.h"
+#include "config_store.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,6 +51,12 @@ static void protocol_rsp_config_u8(const char *name, uint8_t value){ char msg[12
 static void protocol_queue_error(uint8_t err_mask)
 {
     g_pending_errors |= err_mask;
+}
+
+static void protocol_rsp_saved_ok(void)
+{
+    if (ConfigStore_Save()) protocol_rsp_ok();
+    else protocol_rsp_err("SAVE_FAILED");
 }
 
 static void protocol_rsp_event(const EventEntry_t *entry)
@@ -209,57 +216,66 @@ static void handle_set_param(const char *name, const char *value)
         if ((v < 0.0f) || (v > 1.0f)) { protocol_rsp_err("MAX_CURRENT_RANGE"); return; }
         Limits_SetMaxCurrentNominal(v);
         state.maxcurrent = v;
-        protocol_rsp_ok();
+        AxisControl_NotifyConfigChanged();
+        protocol_rsp_saved_ok();
     }
     else if (strcmp(name, "MAX_CURRENT_PEAK") == 0)
     {
         float v = (float)atof(value);
         if ((v < 0.0f) || (v > 2.0f)) { protocol_rsp_err("MAX_CURRENT_PEAK_RANGE"); return; }
         Limits_SetMaxCurrentPeak(v);
-        protocol_rsp_ok();
+        AxisControl_NotifyConfigChanged();
+        protocol_rsp_saved_ok();
     }
     else if (strcmp(name, "MAX_VELOCITY") == 0)
     {
         float v = (float)atof(value);
         if ((v < 0.0f) || (v > 0.1f)) { protocol_rsp_err("MAX_VELOCITY_RANGE"); return; }
         Limits_SetMaxVelocity(v);
-        protocol_rsp_ok();
+        AxisControl_NotifyConfigChanged();
+        protocol_rsp_saved_ok();
     }
     else if (strcmp(name, "MAX_ACCELERATION") == 0)
     {
         float v = (float)atof(value);
         if ((v < 0.0f) || (v > 1.0f)) { protocol_rsp_err("MAX_ACCELERATION_RANGE"); return; }
         Limits_SetMaxAcceleration(v);
-        protocol_rsp_ok();
+        AxisControl_NotifyConfigChanged();
+        protocol_rsp_saved_ok();
     }
     else if (strcmp(name, "SOFT_MIN_POS") == 0)
     {
         Limits_SetSoftMinPos((int32_t)atol(value));
-        protocol_rsp_ok();
+        AxisControl_NotifyConfigChanged();
+        protocol_rsp_saved_ok();
     }
     else if (strcmp(name, "SOFT_MAX_POS") == 0)
     {
         Limits_SetSoftMaxPos((int32_t)atol(value));
-        protocol_rsp_ok();
+        AxisControl_NotifyConfigChanged();
+        protocol_rsp_saved_ok();
     }
     else if (strcmp(name, "CALIB_ZERO_POS") == 0)
     {
         Calibration_SetZeroPosUm((int32_t)atol(value));
-        protocol_rsp_ok();
+        AxisControl_NotifyConfigChanged();
+        protocol_rsp_saved_ok();
     }
     else if (strcmp(name, "CALIB_PITCH_UM") == 0)
     {
         float v = (float)atof(value);
         if (v <= 0.0f) { protocol_rsp_err("CALIB_PITCH_RANGE"); return; }
         Calibration_SetPitchUm(v);
-        protocol_rsp_ok();
+        AxisControl_NotifyConfigChanged();
+        protocol_rsp_saved_ok();
     }
     else if (strcmp(name, "CALIB_SIGN") == 0)
     {
         int32_t sign = atol(value);
         if ((sign != -1) && (sign != 1)) { protocol_rsp_err("CALIB_SIGN_RANGE"); return; }
         Calibration_SetSign((int8_t)sign);
-        protocol_rsp_ok();
+        AxisControl_NotifyConfigChanged();
+        protocol_rsp_saved_ok();
     }
     else protocol_rsp_err("SET_PARAM_UNKNOWN");
 }
@@ -270,25 +286,26 @@ static void handle_set_config(const char *name, const char *value)
     if ((name == NULL) || (value == NULL)) { protocol_rsp_err("SET_CONFIG_FORMAT"); return; }
     v = (uint8_t)atoi(value);
 
-    if (strcmp(name, "SAFE_MODE") == 0) { Commissioning_SetSafeMode(v); protocol_rsp_ok(); }
-    else if (strcmp(name, "ARMING_ONLY") == 0) { Commissioning_SetArmingOnly(v); protocol_rsp_ok(); }
-    else if (strcmp(name, "CONTROLLED_MOTION") == 0) { Commissioning_SetControlledMotion(v); protocol_rsp_ok(); }
+    if (strcmp(name, "SAFE_MODE") == 0) { Commissioning_SetSafeMode(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+    else if (strcmp(name, "ARMING_ONLY") == 0) { Commissioning_SetArmingOnly(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+    else if (strcmp(name, "CONTROLLED_MOTION") == 0) { Commissioning_SetControlledMotion(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
     else if (strcmp(name, "COMMISSION_STAGE") == 0)
     {
         uint8_t stage = (uint8_t)atoi(value);
         if ((stage < 1u) || (stage > 3u)) { protocol_rsp_err("STAGE_RANGE"); return; }
         Commissioning_SetStage(stage);
-        protocol_rsp_ok();
+        AxisControl_NotifyConfigChanged();
+        protocol_rsp_saved_ok();
     }
-    else if (strcmp(name, "BRAKE_INSTALLED") == 0) { SafetyConfig_SetBrakeInstalled(v); protocol_rsp_ok(); }
-    else if (strcmp(name, "COLLISION_SENSOR_INSTALLED") == 0) { SafetyConfig_SetCollisionInstalled(v); protocol_rsp_ok(); }
-    else if (strcmp(name, "PTC_INSTALLED") == 0) { SafetyConfig_SetPtcInstalled(v); protocol_rsp_ok(); }
-    else if (strcmp(name, "BACKUP_SUPPLY_INSTALLED") == 0) { SafetyConfig_SetBackupSupplyInstalled(v); protocol_rsp_ok(); }
-    else if (strcmp(name, "EXTERNAL_INTERLOCK_INSTALLED") == 0) { SafetyConfig_SetExternalInterlockInstalled(v); protocol_rsp_ok(); }
-    else if (strcmp(name, "IGNORE_BRAKE_FEEDBACK") == 0) { SafetyConfig_SetIgnoreBrakeFeedback(v); EventLog_Push(v ? EVT_OVERRIDE_ON : EVT_OVERRIDE_OFF, 1); protocol_rsp_ok(); }
-    else if (strcmp(name, "IGNORE_COLLISION_SENSOR") == 0) { SafetyConfig_SetIgnoreCollisionSensor(v); EventLog_Push(v ? EVT_OVERRIDE_ON : EVT_OVERRIDE_OFF, 2); protocol_rsp_ok(); }
-    else if (strcmp(name, "IGNORE_EXTERNAL_INTERLOCK") == 0) { SafetyConfig_SetIgnoreExternalInterlock(v); EventLog_Push(v ? EVT_OVERRIDE_ON : EVT_OVERRIDE_OFF, 3); protocol_rsp_ok(); }
-    else if (strcmp(name, "ALLOW_MOTION_WITHOUT_CALIBRATION") == 0) { SafetyConfig_SetAllowMotionWithoutCalibration(v); EventLog_Push(v ? EVT_OVERRIDE_ON : EVT_OVERRIDE_OFF, 4); protocol_rsp_ok(); }
+    else if (strcmp(name, "BRAKE_INSTALLED") == 0) { SafetyConfig_SetBrakeInstalled(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+    else if (strcmp(name, "COLLISION_SENSOR_INSTALLED") == 0) { SafetyConfig_SetCollisionInstalled(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+    else if (strcmp(name, "PTC_INSTALLED") == 0) { SafetyConfig_SetPtcInstalled(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+    else if (strcmp(name, "BACKUP_SUPPLY_INSTALLED") == 0) { SafetyConfig_SetBackupSupplyInstalled(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+    else if (strcmp(name, "EXTERNAL_INTERLOCK_INSTALLED") == 0) { SafetyConfig_SetExternalInterlockInstalled(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+    else if (strcmp(name, "IGNORE_BRAKE_FEEDBACK") == 0) { SafetyConfig_SetIgnoreBrakeFeedback(v); EventLog_Push(v ? EVT_OVERRIDE_ON : EVT_OVERRIDE_OFF, 1); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+    else if (strcmp(name, "IGNORE_COLLISION_SENSOR") == 0) { SafetyConfig_SetIgnoreCollisionSensor(v); EventLog_Push(v ? EVT_OVERRIDE_ON : EVT_OVERRIDE_OFF, 2); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+    else if (strcmp(name, "IGNORE_EXTERNAL_INTERLOCK") == 0) { SafetyConfig_SetIgnoreExternalInterlock(v); EventLog_Push(v ? EVT_OVERRIDE_ON : EVT_OVERRIDE_OFF, 3); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+    else if (strcmp(name, "ALLOW_MOTION_WITHOUT_CALIBRATION") == 0) { SafetyConfig_SetAllowMotionWithoutCalibration(v); EventLog_Push(v ? EVT_OVERRIDE_ON : EVT_OVERRIDE_OFF, 4); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
     else protocol_rsp_err("SET_CONFIG_UNKNOWN");
 }
 
@@ -309,8 +326,8 @@ static void handle_cmd(const char *arg1, const char *arg2)
         Calibration_SetValid(1u);
         state.calibrated = 1u;
         EventLog_Push(EVT_CALIB_OK, (int32_t)state.pos_um);
-        AxisState_Set(AXIS_SAFE);
-        protocol_rsp_ok();
+        AxisControl_NotifyCalibrationComplete(1u);
+        protocol_rsp_saved_ok();
     }
     else if (strcmp(arg1, "MOVE_REL") == 0)
     {

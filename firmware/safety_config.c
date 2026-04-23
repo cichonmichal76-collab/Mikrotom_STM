@@ -14,6 +14,7 @@ void SafetyConfig_LoadDefaults(void)
     g_safety.allow_motion_without_calibration = 0u;
 }
 const SafetyConfig_t* SafetyConfig_Get(void){ return &g_safety; }
+void SafetyConfig_Apply(const SafetyConfig_t *cfg){ if (cfg != 0) g_safety = *cfg; }
 void SafetyConfig_SetBrakeInstalled(uint8_t en){ g_safety.brake_installed = !!en; }
 void SafetyConfig_SetCollisionInstalled(uint8_t en){ g_safety.collision_sensor_installed = !!en; }
 void SafetyConfig_SetPtcInstalled(uint8_t en){ g_safety.ptc_installed = !!en; }

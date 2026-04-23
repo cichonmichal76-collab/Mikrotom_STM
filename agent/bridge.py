@@ -26,20 +26,24 @@ class FirmwareTransport:
         baudrate: int = 115200,
         read_timeout_s: float = 0.05,
         command_timeout_s: float = 1.0,
+        heartbeat_interval_s: float = 0.35,
         event_cache_size: int = 128,
     ) -> None:
         self._port = port
         self._baudrate = baudrate
         self._read_timeout_s = read_timeout_s
         self._command_timeout_s = command_timeout_s
+        self._heartbeat_interval_s = heartbeat_interval_s
         self._command_lock = threading.Lock()
         self._connect_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._reader_thread: threading.Thread | None = None
+        self._heartbeat_thread: threading.Thread | None = None
         self._serial: Any = None
         self._responses: queue.Queue[str] = queue.Queue()
         self._latest_telemetry: dict[str, int] = self._default_telemetry()
         self._events: deque[dict[str, int | str]] = deque(maxlen=event_cache_size)
+        self._last_activity_monotonic = time.monotonic()
 
     @staticmethod
     def _default_telemetry() -> dict[str, int]:
@@ -62,6 +66,7 @@ class FirmwareTransport:
             baudrate=int(os.getenv("MIKROTOM_SERIAL_BAUDRATE", "115200")),
             read_timeout_s=float(os.getenv("MIKROTOM_SERIAL_READ_TIMEOUT", "0.05")),
             command_timeout_s=float(os.getenv("MIKROTOM_COMMAND_TIMEOUT", "1.0")),
+            heartbeat_interval_s=float(os.getenv("MIKROTOM_HEARTBEAT_INTERVAL_S", "0.35")),
             event_cache_size=int(os.getenv("MIKROTOM_EVENT_CACHE_SIZE", "128")),
         )
 
@@ -77,6 +82,25 @@ class FirmwareTransport:
 
         if self._reader_thread is not None and self._reader_thread.is_alive():
             self._reader_thread.join(timeout=0.5)
+        if self._heartbeat_thread is not None and self._heartbeat_thread.is_alive():
+            self._heartbeat_thread.join(timeout=0.5)
+
+    def _start_background_threads(self) -> None:
+        if self._reader_thread is None or not self._reader_thread.is_alive():
+            self._reader_thread = threading.Thread(
+                target=self._reader_loop,
+                name="mikrotom-firmware-reader",
+                daemon=True,
+            )
+            self._reader_thread.start()
+
+        if self._heartbeat_interval_s > 0.0 and (self._heartbeat_thread is None or not self._heartbeat_thread.is_alive()):
+            self._heartbeat_thread = threading.Thread(
+                target=self._heartbeat_loop,
+                name="mikrotom-firmware-heartbeat",
+                daemon=True,
+            )
+            self._heartbeat_thread.start()
 
     def _ensure_connected(self) -> None:
         if serial is None:
@@ -94,16 +118,12 @@ class FirmwareTransport:
                 )
                 self._serial.reset_input_buffer()
                 self._serial.reset_output_buffer()
+                self._last_activity_monotonic = time.monotonic()
             except SerialException as exc:
                 raise FirmwareError(f"serial open failed: {exc}") from exc
 
             self._stop_event.clear()
-            self._reader_thread = threading.Thread(
-                target=self._reader_loop,
-                name="mikrotom-firmware-reader",
-                daemon=True,
-            )
-            self._reader_thread.start()
+            self._start_background_threads()
 
     def _mark_disconnected(self) -> None:
         with self._connect_lock:
@@ -135,6 +155,22 @@ class FirmwareTransport:
                 self._handle_telemetry(line)
             elif line.startswith("RSP,"):
                 self._responses.put(line)
+
+    def _heartbeat_loop(self) -> None:
+        while not self._stop_event.is_set():
+            time.sleep(max(0.05, self._heartbeat_interval_s))
+
+            if self._stop_event.is_set():
+                break
+            if self._serial is None:
+                continue
+            if (time.monotonic() - self._last_activity_monotonic) < self._heartbeat_interval_s:
+                continue
+
+            try:
+                self._send_command("CMD HEARTBEAT")
+            except FirmwareError:
+                continue
 
     def _handle_telemetry(self, line: str) -> None:
         parts = line.split(",")
@@ -178,6 +214,7 @@ class FirmwareTransport:
 
     def _send_command(self, line: str) -> dict[str, Any]:
         with self._command_lock:
+            self._last_activity_monotonic = time.monotonic()
             self._clear_pending_responses()
             self._send_line(line)
 
@@ -188,6 +225,7 @@ class FirmwareTransport:
                     response = self._responses.get(timeout=timeout)
                 except queue.Empty:
                     continue
+                self._last_activity_monotonic = time.monotonic()
                 return self._parse_response(response)
 
         raise FirmwareError(f"timeout waiting for response to: {line}")

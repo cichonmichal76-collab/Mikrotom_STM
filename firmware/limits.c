@@ -12,6 +12,7 @@ void Limits_LoadDefaults(void)
     g_limits.peak_time_ms = 200u;
 }
 const Limits_t* Limits_Get(void){ return &g_limits; }
+void Limits_Apply(const Limits_t *limits){ if (limits != 0) g_limits = *limits; }
 void Limits_SetSoftMinPos(int32_t v_um){ g_limits.soft_min_pos_um = v_um; }
 void Limits_SetSoftMaxPos(int32_t v_um){ g_limits.soft_max_pos_um = v_um; }
 void Limits_SetMaxCurrentNominal(float v_A){ g_limits.max_current_nominal_A = v_A; }

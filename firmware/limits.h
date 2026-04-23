@@ -13,6 +13,7 @@ typedef struct {
 void Limits_Init(void);
 void Limits_LoadDefaults(void);
 const Limits_t* Limits_Get(void);
+void Limits_Apply(const Limits_t *limits);
 void Limits_SetSoftMinPos(int32_t v_um);
 void Limits_SetSoftMaxPos(int32_t v_um);
 void Limits_SetMaxCurrentNominal(float v_A);

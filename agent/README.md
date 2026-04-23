@@ -73,6 +73,12 @@ Set `MIKROTOM_SQLITE_PATH=off` to disable persistent logging.
 python -m pip install -r agent/requirements.txt
 ```
 
+For local tests:
+
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
 ## Run
 
 ```bash
@@ -81,6 +87,12 @@ python -m uvicorn agent.main:app --host 127.0.0.1 --port 8000
 
 Then switch [gui/config.js](/C:/Users/cicho/OneDrive/Pulpit/Mikrotom_STM/gui/config.js:1)
 to `demoMode: false`.
+
+## Test
+
+```bash
+python -m pytest
+```
 
 ## Debug endpoint
 

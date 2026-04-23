@@ -82,7 +82,7 @@ The expanded software adds:
 - explicit state management
 - commissioning stages
 - telemetry and event logging
-- agent/API/GUI integration
+- an agent/API/GUI integration path
 
 ### Architectural change
 
@@ -92,7 +92,7 @@ The expanded software adds:
 FOC -> Motor
 ```
 
-#### After
+#### After (design target)
 
 ```text
 GUI
@@ -102,6 +102,11 @@ GUI
         -> FOC
           -> Motor
 ```
+
+In the current repository, the GUI and a minimal local REST agent are present,
+while the firmware still defaults to a safe-integration build that keeps real
+motion disabled until the original current-feedback and full motion path are
+restored.
 
 ## New layers and modules
 
@@ -184,13 +189,19 @@ The new system adds `eventlog.*` for recent structured events such as:
 - operator commands
 - calibration success
 
+The current firmware also exposes the recent log to the agent through
+`GET EVENT_COUNT` and `GET EVENT_POP`, allowing the agent to serve
+`/api/events/recent`.
+
 ### API and GUI path
 
-The new system is designed to support:
+The new system now supports a minimal REST path with:
 
 - `/api/status`
 - `/api/cmd/*`
 - `/api/params`
+- `/api/telemetry/latest`
+- `/api/events/recent`
 
 This turns the firmware into a controlled subsystem that can participate in a
 larger operator workflow.
@@ -231,8 +242,8 @@ larger operator workflow.
 #### After
 
 - command protocol
-- agent/API path
-- GUI/HMI integration
+- local agent/API path
+- GUI/HMI integration path
 
 ### Calibration
 

@@ -5,6 +5,7 @@ Initial import of the STM32G473RCTx control firmware package for the mikrotome a
 Repository layout:
 
 - `firmware/` - integrated firmware package sources and headers
+- `agent/` - local REST bridge from GUI to the STM32 UART protocol
 - `docs/` - PRD and system requirements documents
 - `gui/` - static operator GUI for dashboard, safety, commissioning, and motion control
 

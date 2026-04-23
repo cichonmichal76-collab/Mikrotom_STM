@@ -13,7 +13,8 @@ The GUI is an operator-facing layer. It:
 - provides a raw service command panel
 
 The GUI does not talk to STM32 directly. It expects a local agent/backend that
-translates REST API calls into UART protocol messages for the firmware.
+translates REST API calls into UART protocol messages for the firmware. A
+minimal implementation of that bridge now lives in `agent/`.
 
 ## Modes
 

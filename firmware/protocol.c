@@ -52,6 +52,25 @@ static void protocol_queue_error(uint8_t err_mask)
     g_pending_errors |= err_mask;
 }
 
+static void protocol_rsp_event(const EventEntry_t *entry)
+{
+    char msg[160];
+
+    if (entry == 0)
+    {
+        Protocol_SendLine("RSP,EVENT,NONE\n");
+        return;
+    }
+
+    snprintf(msg,
+             sizeof(msg),
+             "RSP,EVENT,%lu,%s,%ld\n",
+             (unsigned long)entry->ts_ms,
+             EventLog_CodeName(entry->code),
+             (long)entry->value);
+    Protocol_SendLine(msg);
+}
+
 static void protocol_queue_completed_command(void)
 {
     if (g_cmd_count >= PROTOCOL_CMD_QUEUE_DEPTH)
@@ -131,6 +150,14 @@ static void handle_get_simple(const char *arg1)
         protocol_rsp_config_u8("RUN_ALLOWED", AxisControl_RunAllowed());
     else if (strcmp(arg1, "POS") == 0)
         protocol_rsp_param_i32("POS", (int32_t)state.pos_um);
+    else if (strcmp(arg1, "EVENT_COUNT") == 0)
+        protocol_rsp_param_u32("EVENT_COUNT", EventLog_Count());
+    else if (strcmp(arg1, "EVENT_POP") == 0)
+    {
+        EventEntry_t entry;
+        if (EventLog_Pop(&entry)) protocol_rsp_event(&entry);
+        else protocol_rsp_event(0);
+    }
     else if (strcmp(arg1, "VERSION") == 0)
     {
         char msg[192];

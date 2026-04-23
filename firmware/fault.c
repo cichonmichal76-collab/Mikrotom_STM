@@ -1,0 +1,64 @@
+#include "fault.h"
+#include "eventlog.h"
+#include "axis_state.h"
+
+static volatile uint32_t g_fault_mask = 0u;
+static volatile FaultCode_t g_last_fault = FAULT_NONE;
+
+static uint32_t fault_to_mask(FaultCode_t code)
+{
+    if (code == FAULT_NONE) return 0u;
+    return (1UL << ((uint32_t)code - 1UL));
+}
+
+void Fault_Init(void){ g_fault_mask = 0u; g_last_fault = FAULT_NONE; }
+
+void Fault_Set(FaultCode_t code)
+{
+    if (code == FAULT_NONE) return;
+    g_fault_mask |= fault_to_mask(code);
+    g_last_fault = code;
+    EventLog_Push(EVT_FAULT_SET, (int32_t)code);
+    AxisState_Set(AXIS_FAULT);
+}
+
+void Fault_Clear(FaultCode_t code)
+{
+    if (code == FAULT_NONE) return;
+    g_fault_mask &= ~fault_to_mask(code);
+    EventLog_Push(EVT_FAULT_CLEAR, (int32_t)code);
+    if (g_fault_mask == 0u) g_last_fault = FAULT_NONE;
+}
+
+void Fault_ClearAll(void)
+{
+    g_fault_mask = 0u;
+    g_last_fault = FAULT_NONE;
+    EventLog_Push(EVT_FAULT_CLEAR, 0);
+    AxisState_Set(AXIS_SAFE);
+}
+
+uint8_t Fault_IsActive(void){ return g_fault_mask ? 1u : 0u; }
+FaultCode_t Fault_GetLast(void){ return g_last_fault; }
+uint32_t Fault_GetMask(void){ return g_fault_mask; }
+
+const char* Fault_Name(FaultCode_t code)
+{
+    switch (code)
+    {
+        case FAULT_NONE: return "NONE";
+        case FAULT_OVERCURRENT: return "OVERCURRENT";
+        case FAULT_OVERTEMP: return "OVERTEMP";
+        case FAULT_TRACKING: return "TRACKING";
+        case FAULT_OVERSPEED: return "OVERSPEED";
+        case FAULT_STALL: return "STALL";
+        case FAULT_ENCODER_INVALID: return "ENCODER_INVALID";
+        case FAULT_UNDERVOLTAGE: return "UNDERVOLTAGE";
+        case FAULT_OVERVOLTAGE: return "OVERVOLTAGE";
+        case FAULT_COMM_TIMEOUT: return "COMM_TIMEOUT";
+        case FAULT_NOT_CALIBRATED: return "NOT_CALIBRATED";
+        case FAULT_CONFIG_INVALID: return "CONFIG_INVALID";
+        case FAULT_ESTOP: return "ESTOP";
+        default: return "UNKNOWN";
+    }
+}

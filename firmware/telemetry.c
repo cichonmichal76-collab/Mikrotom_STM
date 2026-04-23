@@ -1,0 +1,66 @@
+#include "main.h"
+#include "telemetry.h"
+#include "usart.h"
+#include <stdio.h>
+#include <string.h>
+
+static TelemetrySample_t g_buf[TELEMETRY_BUFFER_SIZE];
+static volatile uint16_t g_head = 0u;
+static volatile uint16_t g_tail = 0u;
+static volatile uint16_t g_count = 0u;
+#define TELEMETRY_LINE_MAX 128
+static char g_tx_line[TELEMETRY_LINE_MAX];
+
+void Telemetry_Init(void){ g_head=0u; g_tail=0u; g_count=0u; }
+static inline uint32_t telemetry_now_ms(void){ return HAL_GetTick(); }
+
+void Telemetry_Sample(const TelemetrySample_t *in)
+{
+    if (!in) return;
+    TelemetrySample_t s = *in;
+    if (s.ts_ms == 0u) s.ts_ms = telemetry_now_ms();
+    g_buf[g_head] = s;
+    g_head = (uint16_t)((g_head + 1u) % TELEMETRY_BUFFER_SIZE);
+    if (g_count < TELEMETRY_BUFFER_SIZE) g_count++;
+    else g_tail = (uint16_t)((g_tail + 1u) % TELEMETRY_BUFFER_SIZE);
+}
+
+static uint8_t telemetry_pop(TelemetrySample_t *out)
+{
+    if ((out == 0) || (g_count == 0u)) return 0u;
+    *out = g_buf[g_tail];
+    g_tail = (uint16_t)((g_tail + 1u) % TELEMETRY_BUFFER_SIZE);
+    g_count--;
+    return 1u;
+}
+
+uint16_t Telemetry_Count(void){ return g_count; }
+
+static void telemetry_send_line(const char *line)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t*)line, (uint16_t)strlen(line), 50);
+}
+
+void Telemetry_Flush(void)
+{
+    TelemetrySample_t s;
+    uint8_t max_per_loop = 4u;
+    uint8_t sent = 0u;
+    while ((sent < max_per_loop) && telemetry_pop(&s))
+    {
+        int len = snprintf(g_tx_line, TELEMETRY_LINE_MAX,
+            "TEL,%lu,%ld,%ld,%ld,%ld,%d,%d,%u,%u\n",
+            (unsigned long)s.ts_ms,
+            (long)s.pos_um,
+            (long)s.pos_set_um,
+            (long)s.vel_um_s,
+            (long)s.vel_set_um_s,
+            (int)s.iq_ref_mA,
+            (int)s.iq_meas_mA,
+            (unsigned int)s.state,
+            (unsigned int)s.fault
+        );
+        if (len > 0) telemetry_send_line(g_tx_line);
+        sent++;
+    }
+}

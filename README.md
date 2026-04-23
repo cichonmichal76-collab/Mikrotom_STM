@@ -14,4 +14,5 @@ Architecture note:
 
 - the current firmware sources remain in a flat `firmware/` layout for safe integration
 - the target STM32/CubeIDE architecture and module mapping are documented in `docs/STM32_Code_Architecture.md`
+- the software evolution from the original FOC-centric firmware to the safety and GUI-oriented system is documented in `docs/STM32_Software_Evolution.md`
 - a recommended future project layout is scaffolded under `firmware/Core/`

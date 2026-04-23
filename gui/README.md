@@ -14,7 +14,7 @@ The GUI is an operator-facing layer. It:
 
 The GUI does not talk to STM32 directly. It expects a local agent/backend that
 translates REST API calls into UART protocol messages for the firmware. A
-minimal implementation of that bridge now lives in `agent/`.
+minimal implementation of that bridge lives in `agent/`.
 
 ## Modes
 
@@ -33,6 +33,7 @@ minimal implementation of that bridge now lives in `agent/`.
 
 - `/api/cmd/enable`
 - `/api/cmd/disable`
+- `/api/cmd/ack-fault`
 - `/api/cmd/stop`
 - `/api/cmd/qstop`
 - `/api/cmd/move-rel`
@@ -46,7 +47,7 @@ minimal implementation of that bridge now lives in `agent/`.
 
 ```json
 {
-  "axis_state": "SAFE",
+  "axis_state": "CONFIG",
   "fault": "NONE",
   "fault_mask": 0,
   "commissioning_stage": 1,
@@ -54,15 +55,31 @@ minimal implementation of that bridge now lives in `agent/`.
   "arming_only": 0,
   "controlled_motion": 0,
   "run_allowed": 0,
+  "enabled": 0,
+  "config_loaded": 0,
+  "safe_integration": 1,
+  "motion_implemented": 0,
   "position_um": 0,
   "position_set_um": 0,
   "brake_installed": 0,
+  "collision_sensor_installed": 0,
+  "ptc_installed": 1,
+  "backup_supply_installed": 0,
+  "external_interlock_installed": 0,
   "ignore_brake_feedback": 0,
+  "ignore_collision_sensor": 0,
+  "ignore_external_interlock": 0,
+  "allow_motion_without_calibration": 0,
   "calib_valid": 0,
   "max_current": 0.2,
+  "max_current_peak": 0.3,
   "max_velocity": 0.005,
+  "max_acceleration": 0.02,
   "soft_min_pos": -10000,
-  "soft_max_pos": 10000
+  "soft_max_pos": 10000,
+  "calib_zero_pos": 0,
+  "calib_pitch_um": 30000.0,
+  "calib_sign": 1
 }
 ```
 
@@ -94,6 +111,9 @@ minimal implementation of that bridge now lives in `agent/`.
 ]
 ```
 
+`ts_ms` is MCU-relative uptime in milliseconds, not Unix wall-clock time. The
+GUI renders it as elapsed time.
+
 ### `POST /api/params`
 
 The GUI sends a normalized JSON payload. Typical fields:
@@ -102,9 +122,16 @@ The GUI sends a normalized JSON payload. Typical fields:
 {
   "commissioning_stage": 3,
   "brake_installed": 1,
+  "collision_sensor_installed": 0,
+  "external_interlock_installed": 0,
   "ignore_brake_feedback": 0,
+  "ignore_collision_sensor": 0,
+  "ignore_external_interlock": 0,
+  "allow_motion_without_calibration": 0,
   "max_current": 0.2,
+  "max_current_peak": 0.3,
   "max_velocity": 0.005,
+  "max_acceleration": 0.02,
   "soft_min_pos": -10000,
   "soft_max_pos": 10000
 }
@@ -115,9 +142,16 @@ firmware, for example:
 
 - `SET CONFIG COMMISSION_STAGE 3`
 - `SET CONFIG BRAKE_INSTALLED 1`
+- `SET CONFIG COLLISION_SENSOR_INSTALLED 0`
+- `SET CONFIG EXTERNAL_INTERLOCK_INSTALLED 0`
 - `SET CONFIG IGNORE_BRAKE_FEEDBACK 0`
+- `SET CONFIG IGNORE_COLLISION_SENSOR 0`
+- `SET CONFIG IGNORE_EXTERNAL_INTERLOCK 0`
+- `SET CONFIG ALLOW_MOTION_WITHOUT_CALIBRATION 0`
 - `SET PARAM MAX_CURRENT 0.2`
+- `SET PARAM MAX_CURRENT_PEAK 0.3`
 - `SET PARAM MAX_VELOCITY 0.005`
+- `SET PARAM MAX_ACCELERATION 0.02`
 - `SET PARAM SOFT_MIN_POS -10000`
 - `SET PARAM SOFT_MAX_POS 10000`
 

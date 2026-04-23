@@ -11,6 +11,9 @@ GUI system. It covers:
 - implementation rules
 - migration guidance from the current integrated package
 
+The machine-side HMI packet contract is specified separately in
+`docs/HMI_Protocol.md`.
+
 ## System view
 
 ```text

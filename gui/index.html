@@ -96,6 +96,7 @@
           <div class="button-row primary-actions">
             <button id="btn-enable" class="btn tone-ok">ENABLE</button>
             <button id="btn-disable" class="btn tone-muted">DISABLE</button>
+            <button id="btn-ack-fault" class="btn tone-muted">ACK_FAULT</button>
             <button id="btn-stop" class="btn tone-warn">STOP</button>
             <button id="btn-qstop" class="btn tone-danger">QSTOP</button>
           </div>
@@ -165,6 +166,20 @@
             </div>
             <p class="panel-note">Overrides must remain explicit and deliberate.</p>
           </div>
+          <div class="switch-row readonly">
+            <div>
+              <strong>Config store loaded</strong>
+              <span>Read-only flash load status</span>
+            </div>
+            <input id="cfg-config-loaded" type="checkbox" disabled />
+          </div>
+          <div class="switch-row readonly">
+            <div>
+              <strong>Axis enabled</strong>
+              <span>Read-only runtime enable state</span>
+            </div>
+            <input id="cfg-enabled" type="checkbox" disabled />
+          </div>
           <div class="switch-row">
             <div>
               <strong>Brake installed</strong>
@@ -174,10 +189,45 @@
           </div>
           <div class="switch-row">
             <div>
+              <strong>Collision sensor installed</strong>
+              <span>Hardware presence flag</span>
+            </div>
+            <input id="cfg-collision-installed" type="checkbox" />
+          </div>
+          <div class="switch-row">
+            <div>
+              <strong>External interlock installed</strong>
+              <span>Machine interlock presence flag</span>
+            </div>
+            <input id="cfg-external-interlock-installed" type="checkbox" />
+          </div>
+          <div class="switch-row">
+            <div>
               <strong>Ignore brake feedback</strong>
               <span>Temporary test override only</span>
             </div>
             <input id="cfg-ignore-brake" type="checkbox" />
+          </div>
+          <div class="switch-row">
+            <div>
+              <strong>Ignore collision sensor</strong>
+              <span>Temporary commissioning override</span>
+            </div>
+            <input id="cfg-ignore-collision" type="checkbox" />
+          </div>
+          <div class="switch-row">
+            <div>
+              <strong>Ignore external interlock</strong>
+              <span>Temporary commissioning override</span>
+            </div>
+            <input id="cfg-ignore-interlock" type="checkbox" />
+          </div>
+          <div class="switch-row">
+            <div>
+              <strong>Allow motion without calibration</strong>
+              <span>Explicit override for controlled testing only</span>
+            </div>
+            <input id="cfg-allow-no-calib" type="checkbox" />
           </div>
           <div class="switch-row readonly">
             <div>
@@ -192,8 +242,16 @@
               <input id="cfg-max-current" type="number" step="0.01" />
             </label>
             <label class="field">
+              <span>MAX_CURRENT_PEAK [A]</span>
+              <input id="cfg-max-current-peak" type="number" step="0.01" />
+            </label>
+            <label class="field">
               <span>MAX_VELOCITY [m/s]</span>
               <input id="cfg-max-velocity" type="number" step="0.0001" />
+            </label>
+            <label class="field">
+              <span>MAX_ACCELERATION [m/s2]</span>
+              <input id="cfg-max-acceleration" type="number" step="0.0001" />
             </label>
             <label class="field">
               <span>SOFT_MIN_POS [um]</span>
@@ -221,7 +279,7 @@
             <table class="events-table">
               <thead>
                 <tr>
-                  <th>Time</th>
+                  <th>MCU time</th>
                   <th>Code</th>
                   <th>Value</th>
                 </tr>

@@ -38,6 +38,16 @@ static AxisState_t axis_control_idle_state(void)
 
 void AxisControl_Init(void){}
 
+void AxisControl_RefreshState(void)
+{
+    AxisState_t current = AxisState_Get();
+
+    if ((current == AXIS_MOTION) || (current == AXIS_STOPPING) || (current == AXIS_CALIBRATION))
+        return;
+
+    AxisState_Set(axis_control_idle_state());
+}
+
 uint8_t AxisControl_RunAllowed(void)
 {
     if (!axis_preconditions_ok()) return 0u;

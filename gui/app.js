@@ -38,10 +38,19 @@ function setBadge(id, text, tone) {
   node.dataset.tone = tone;
 }
 
+async function readJson(response) {
+  return await response.json().catch(() => ({}));
+}
+
+function extractErrorMessage(body, status) {
+  return body.error || body.detail || `HTTP_${status}`;
+}
+
 async function apiGet(path) {
   const response = await fetch(`${cfg.apiBaseUrl}${path}`);
-  if (!response.ok) throw new Error(`HTTP_${response.status}`);
-  return await response.json();
+  const body = await readJson(response);
+  if (!response.ok) throw new Error(extractErrorMessage(body, response.status));
+  return body;
 }
 
 async function apiPost(path, payload) {
@@ -50,10 +59,8 @@ async function apiPost(path, payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload || {})
   });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(body.error || `HTTP_${response.status}`);
-  }
+  const body = await readJson(response);
+  if (!response.ok) throw new Error(extractErrorMessage(body, response.status));
   return body;
 }
 
@@ -69,6 +76,9 @@ async function executeCommand(type, payload = {}) {
         break;
       case "disable":
         result = await apiPost("/api/cmd/disable", {});
+        break;
+      case "ackFault":
+        result = await apiPost("/api/cmd/ack-fault", {});
         break;
       case "stop":
         result = await apiPost("/api/cmd/stop", {});
@@ -137,15 +147,53 @@ async function refreshData() {
   renderAll();
 }
 
+function stateTone(axisState) {
+  switch (String(axisState || "UNKNOWN")) {
+    case "FAULT":
+    case "ESTOP":
+      return "err";
+    case "SAFE":
+    case "CONFIG":
+    case "CALIBRATION":
+    case "STOPPING":
+    case "ARMED":
+      return "warn";
+    case "READY":
+    case "MOTION":
+      return "ok";
+    default:
+      return "muted";
+  }
+}
+
+function formatBool(value) {
+  return Number(value || 0) === 1 ? "YES" : "NO";
+}
+
+function formatEventTime(tsMs) {
+  const value = Math.max(0, Number(tsMs || 0));
+  if (value < 1000) return `${value} ms`;
+  if (value < 60000) return `${(value / 1000).toFixed(2)} s`;
+  return `${(value / 60000).toFixed(1)} min`;
+}
+
 function explainRunAllowed(status) {
   const blockers = [];
+  const calibrationRequired = (
+    Number(status.calib_valid || 0) !== 1 &&
+    Number(status.allow_motion_without_calibration || 0) !== 1
+  );
 
+  if (Number(status.motion_implemented ?? 1) !== 1) blockers.push("this build still has motion disabled");
+  if (Number(status.config_loaded || 0) !== 1) blockers.push("configuration was not loaded from flash");
   if (Number(status.fault_mask || 0) !== 0) blockers.push("fault active");
+  if (String(status.axis_state || "") === "CONFIG") blockers.push("axis is waiting for configuration or calibration");
   if (Number(status.commissioning_stage || 0) !== 3) blockers.push("stage is not 3");
   if (Number(status.safe_mode || 0) !== 0) blockers.push("safe mode active");
-  if (Number(status.calib_valid || 0) !== 1) blockers.push("calibration missing");
+  if (Number(status.enabled || 0) !== 1) blockers.push("drive is not enabled");
+  if (calibrationRequired) blockers.push("calibration is required");
 
-  if (Number(status.run_allowed || 0) === 1) {
+  if (Number(status.run_allowed || 0) === 1 && Number(status.motion_implemented ?? 1) === 1) {
     return "Motion is permitted. Use conservative moves and keep STOP/QSTOP ready.";
   }
 
@@ -154,11 +202,18 @@ function explainRunAllowed(status) {
 
 function renderStatusDetails(status) {
   const items = [
+    ["Axis enabled", formatBool(status.enabled)],
+    ["Config store loaded", formatBool(status.config_loaded)],
+    ["Motion implemented", formatBool(status.motion_implemented)],
+    ["Safe integration build", formatBool(status.safe_integration)],
     ["Commissioning stage", status.commissioning_stage ?? "--"],
     ["Safe mode", Number(status.safe_mode || 0) ? "ON" : "OFF"],
     ["Arming only", Number(status.arming_only || 0) ? "ON" : "OFF"],
     ["Controlled motion", Number(status.controlled_motion || 0) ? "ON" : "OFF"],
-    ["Calibration valid", Number(status.calib_valid || 0) ? "YES" : "NO"],
+    ["Allow motion without calibration", formatBool(status.allow_motion_without_calibration)],
+    ["Calibration valid", formatBool(status.calib_valid)],
+    ["PTC installed", formatBool(status.ptc_installed)],
+    ["Backup supply installed", formatBool(status.backup_supply_installed)],
     ["Fault mask", status.fault_mask ?? "--"]
   ];
 
@@ -176,9 +231,8 @@ function renderEvents() {
 
   (uiState.events || []).slice(0, 24).forEach((event) => {
     const row = document.createElement("tr");
-    const when = new Date(Number(event.ts_ms || Date.now())).toLocaleTimeString("en-US");
     row.innerHTML = `
-      <td>${when}</td>
+      <td>${formatEventTime(event.ts_ms)}</td>
       <td>${event.code || event.type || "--"}</td>
       <td>${event.value ?? event.details ?? "--"}</td>
     `;
@@ -246,11 +300,13 @@ function renderAll() {
   const fault = status.fault || "UNKNOWN";
   const runAllowed = Number(status.run_allowed || 0);
   const stage = Number(status.commissioning_stage || 1);
+  const motionImplemented = Number(status.motion_implemented ?? 1);
+  const liveMotionReady = runAllowed === 1 && motionImplemented === 1;
 
   setBadge("badge-connection", uiState.connected ? "Connection OK" : "Connection lost", uiState.connected ? "ok" : "err");
-  setBadge("badge-state", `Axis ${axisState}`, axisState === "FAULT" ? "err" : axisState === "SAFE" ? "warn" : "ok");
+  setBadge("badge-state", `Axis ${axisState}`, stateTone(axisState));
   setBadge("badge-fault", `Fault ${fault}`, fault === "NONE" ? "ok" : "err");
-  setBadge("badge-run", `RUN_ALLOWED ${runAllowed}`, runAllowed ? "ok" : "warn");
+  setBadge("badge-run", `RUN_ALLOWED ${runAllowed}`, liveMotionReady ? "ok" : "warn");
   setBadge("badge-stage", `Stage ${stage}`, stage === 3 ? "ok" : stage === 2 ? "warn" : "muted");
 
   $("kpi-pos").textContent = `${fmt(telemetry.pos_um ?? status.position_um ?? 0)} um`;
@@ -258,21 +314,31 @@ function renderAll() {
   $("kpi-vel").textContent = `${fmt(telemetry.vel_um_s ?? 0)} um/s`;
   $("kpi-iq").textContent = `${fmt(telemetry.iq_meas_mA ?? 0)} mA`;
 
+  $("cfg-config-loaded").checked = Number(status.config_loaded || 0) === 1;
+  $("cfg-enabled").checked = Number(status.enabled || 0) === 1;
   $("cfg-brake-installed").checked = Number(status.brake_installed || 0) === 1;
+  $("cfg-collision-installed").checked = Number(status.collision_sensor_installed || 0) === 1;
+  $("cfg-external-interlock-installed").checked = Number(status.external_interlock_installed || 0) === 1;
   $("cfg-ignore-brake").checked = Number(status.ignore_brake_feedback || 0) === 1;
+  $("cfg-ignore-collision").checked = Number(status.ignore_collision_sensor || 0) === 1;
+  $("cfg-ignore-interlock").checked = Number(status.ignore_external_interlock || 0) === 1;
+  $("cfg-allow-no-calib").checked = Number(status.allow_motion_without_calibration || 0) === 1;
   $("cfg-calib-valid").checked = Number(status.calib_valid || 0) === 1;
   $("cfg-max-current").value = status.max_current ?? 0.2;
+  $("cfg-max-current-peak").value = status.max_current_peak ?? 0.3;
   $("cfg-max-velocity").value = status.max_velocity ?? 0.005;
+  $("cfg-max-acceleration").value = status.max_acceleration ?? 0.02;
   $("cfg-soft-min").value = status.soft_min_pos ?? -10000;
   $("cfg-soft-max").value = status.soft_max_pos ?? 10000;
 
   $("move-warning").textContent = explainRunAllowed(status);
   $("connection-detail").textContent = uiState.connected
-    ? `Source: ${cfg.demoMode ? "DEMO data model" : cfg.apiBaseUrl}`
+    ? `Source: ${cfg.demoMode ? "DEMO data model" : cfg.apiBaseUrl} | build ${motionImplemented ? "motion-enabled" : "safe-integration"}`
     : `Source unavailable: ${uiState.lastError || "unknown error"}`;
 
-  $("btn-move-rel").disabled = runAllowed !== 1;
-  $("btn-move-abs").disabled = runAllowed !== 1;
+  $("btn-move-rel").disabled = !liveMotionReady;
+  $("btn-move-abs").disabled = !liveMotionReady;
+  $("btn-ack-fault").disabled = Number(status.fault_mask || 0) === 0;
 
   ["stage-1-card", "stage-2-card", "stage-3-card"].forEach((id, index) => {
     $(id).classList.toggle("active", stage === index + 1);
@@ -283,7 +349,7 @@ function renderAll() {
   renderEvents();
 
   $("footer-left").textContent = `API ${cfg.apiBaseUrl}`;
-  $("footer-right").textContent = `Mode ${cfg.demoMode ? "DEMO" : "LIVE"}`;
+  $("footer-right").textContent = `Mode ${cfg.demoMode ? "DEMO" : "LIVE"} | ${motionImplemented ? "MOTION" : "SAFE-INTEGRATION"}`;
 }
 
 function stageChecksSatisfied(stage) {
@@ -303,6 +369,7 @@ async function runAction(action, payload, successMessage) {
 function bindActions() {
   $("btn-enable").addEventListener("click", () => runAction("enable", {}, "ENABLE sent"));
   $("btn-disable").addEventListener("click", () => runAction("disable", {}, "DISABLE sent"));
+  $("btn-ack-fault").addEventListener("click", () => runAction("ackFault", {}, "ACK_FAULT sent"));
   $("btn-stop").addEventListener("click", () => runAction("stop", {}, "STOP sent"));
   $("btn-qstop").addEventListener("click", () => runAction("qstop", {}, "QSTOP sent"));
 
@@ -354,9 +421,16 @@ function bindActions() {
   $("btn-save-safety").addEventListener("click", async () => {
     await runAction("params", {
       brake_installed: $("cfg-brake-installed").checked ? 1 : 0,
+      collision_sensor_installed: $("cfg-collision-installed").checked ? 1 : 0,
+      external_interlock_installed: $("cfg-external-interlock-installed").checked ? 1 : 0,
       ignore_brake_feedback: $("cfg-ignore-brake").checked ? 1 : 0,
+      ignore_collision_sensor: $("cfg-ignore-collision").checked ? 1 : 0,
+      ignore_external_interlock: $("cfg-ignore-interlock").checked ? 1 : 0,
+      allow_motion_without_calibration: $("cfg-allow-no-calib").checked ? 1 : 0,
       max_current: Number($("cfg-max-current").value || 0.2),
+      max_current_peak: Number($("cfg-max-current-peak").value || 0.3),
       max_velocity: Number($("cfg-max-velocity").value || 0.005),
+      max_acceleration: Number($("cfg-max-acceleration").value || 0.02),
       soft_min_pos: Number($("cfg-soft-min").value || -10000),
       soft_max_pos: Number($("cfg-soft-max").value || 10000)
     }, "Safety parameters sent");

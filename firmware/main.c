@@ -172,8 +172,8 @@ int main(void)
     Protocol_Init();
 
     ConfigStore_Load();
-    AxisState_Set(AXIS_SAFE);
     EventLog_Push(EVT_BOOT, 0);
+    AxisControl_RefreshState();
 
     HAL_OPAMP_Start(&hopamp1);
     HAL_OPAMP_Start(&hopamp2);

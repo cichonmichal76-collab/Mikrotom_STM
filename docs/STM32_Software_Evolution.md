@@ -149,14 +149,16 @@ This turns safety into explicit software ownership instead of implicit behavior.
 
 ### State machine
 
-The new system adds a clear axis state model:
+The new system adds an explicit axis state model. In the current repository the
+runtime states include:
 
 ```text
-SAFE -> READY -> MOTION -> FAULT
+BOOT -> CONFIG / SAFE -> CALIBRATION -> ARMED -> READY -> MOTION -> STOPPING -> FAULT
 ```
 
-This replaces scattered conditionals with deliberate transitions and improves
-operator predictability.
+`CONFIG` now represents a deliberate waiting state when configuration or
+calibration is still incomplete, instead of silently collapsing everything into
+`SAFE`.
 
 ### Commissioning
 
@@ -195,7 +197,7 @@ The current firmware also exposes the recent log to the agent through
 
 ### API and GUI path
 
-The new system now supports a minimal REST path with:
+The new system now supports a local REST path with:
 
 - `/api/status`
 - `/api/cmd/*`
@@ -203,8 +205,8 @@ The new system now supports a minimal REST path with:
 - `/api/telemetry/latest`
 - `/api/events/recent`
 
-This turns the firmware into a controlled subsystem that can participate in a
-larger operator workflow.
+The current repository includes both the static GUI and a minimal Python agent
+that translates those REST calls into the STM32 UART protocol.
 
 ## Functional comparison
 
@@ -274,6 +276,10 @@ The intended conditions are:
 - `safe_mode == 0`
 - calibration valid
 - motion explicitly enabled
+
+The current firmware additionally reports build-time motion availability so the
+agent/GUI can distinguish between "commissioning preconditions are met" and
+"this build still has motion compiled out for safe integration".
 
 This is a major architectural shift away from direct unrestricted control.
 

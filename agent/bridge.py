@@ -5,6 +5,7 @@ import queue
 import threading
 import time
 from collections import deque
+from datetime import datetime, timezone
 from typing import Any
 
 try:
@@ -13,6 +14,8 @@ try:
 except ImportError:  # pragma: no cover - handled at runtime on target machine
     serial = None
     SerialException = Exception
+
+from agent.log_store import SQLiteLogStore
 
 
 class FirmwareError(RuntimeError):
@@ -28,6 +31,7 @@ class FirmwareTransport:
         command_timeout_s: float = 1.0,
         heartbeat_interval_s: float = 0.35,
         event_cache_size: int = 128,
+        log_store: SQLiteLogStore | None = None,
     ) -> None:
         self._port = port
         self._baudrate = baudrate
@@ -44,6 +48,7 @@ class FirmwareTransport:
         self._latest_telemetry: dict[str, int] = self._default_telemetry()
         self._events: deque[dict[str, int | str]] = deque(maxlen=event_cache_size)
         self._last_activity_monotonic = time.monotonic()
+        self._log_store = log_store
 
     @staticmethod
     def _default_telemetry() -> dict[str, int]:
@@ -61,6 +66,7 @@ class FirmwareTransport:
 
     @classmethod
     def from_env(cls) -> "FirmwareTransport":
+        default_sqlite_path = os.path.join(os.path.dirname(__file__), "mikrotom_agent.sqlite3")
         return cls(
             port=os.getenv("MIKROTOM_SERIAL_PORT", "COM3"),
             baudrate=int(os.getenv("MIKROTOM_SERIAL_BAUDRATE", "115200")),
@@ -68,6 +74,7 @@ class FirmwareTransport:
             command_timeout_s=float(os.getenv("MIKROTOM_COMMAND_TIMEOUT", "1.0")),
             heartbeat_interval_s=float(os.getenv("MIKROTOM_HEARTBEAT_INTERVAL_S", "0.35")),
             event_cache_size=int(os.getenv("MIKROTOM_EVENT_CACHE_SIZE", "128")),
+            log_store=SQLiteLogStore.from_env(default_sqlite_path),
         )
 
     def close(self) -> None:
@@ -84,6 +91,8 @@ class FirmwareTransport:
             self._reader_thread.join(timeout=0.5)
         if self._heartbeat_thread is not None and self._heartbeat_thread.is_alive():
             self._heartbeat_thread.join(timeout=0.5)
+        if self._log_store is not None:
+            self._log_store.close()
 
     def _start_background_threads(self) -> None:
         if self._reader_thread is None or not self._reader_thread.is_alive():
@@ -152,8 +161,10 @@ class FirmwareTransport:
                 continue
 
             if line.startswith("TEL,"):
+                self._log_protocol("rx_tel", line)
                 self._handle_telemetry(line)
             elif line.startswith("RSP,"):
+                self._log_protocol("rx_rsp", line)
                 self._responses.put(line)
 
     def _heartbeat_loop(self) -> None:
@@ -178,7 +189,7 @@ class FirmwareTransport:
             return
 
         try:
-            self._latest_telemetry = {
+            telemetry = {
                 "ts_ms": int(parts[1]),
                 "pos_um": int(parts[2]),
                 "pos_set_um": int(parts[3]),
@@ -191,6 +202,10 @@ class FirmwareTransport:
             }
         except ValueError:
             return
+
+        self._latest_telemetry = telemetry
+        if self._log_store is not None:
+            self._log_store.log_telemetry(self._port, telemetry)
 
     def _clear_pending_responses(self) -> None:
         while True:
@@ -211,6 +226,8 @@ class FirmwareTransport:
         except (OSError, SerialException) as exc:
             self._mark_disconnected()
             raise FirmwareError(f"serial write failed: {exc}") from exc
+
+        self._log_protocol("tx", line)
 
     def _send_command(self, line: str) -> dict[str, Any]:
         with self._command_lock:
@@ -282,6 +299,10 @@ class FirmwareTransport:
     def _read_config(self, name: str) -> str:
         return str(self._send_command(f"GET CONFIG {name}")["value"])
 
+    def _log_protocol(self, direction: str, line: str) -> None:
+        if self._log_store is not None:
+            self._log_store.log_protocol(self._port, direction, line)
+
     def latest_telemetry(self) -> dict[str, int]:
         self._ensure_connected()
         return dict(self._latest_telemetry)
@@ -304,6 +325,8 @@ class FirmwareTransport:
                 "value": int(event["value"]),
             }
             self._events.append(normalized)
+            if self._log_store is not None:
+                self._log_store.log_event(self._port, normalized)
             drained.append(normalized)
 
         return drained
@@ -314,6 +337,15 @@ class FirmwareTransport:
         if limit <= 0:
             return events
         return events[-limit:]
+
+    def version_info(self) -> dict[str, str]:
+        version = self._send_command("GET VERSION")
+        return {
+            "name": str(version.get("name", "")),
+            "version": str(version.get("version", "")),
+            "build_date": str(version.get("build_date", "")),
+            "git_hash": str(version.get("git_hash", "")),
+        }
 
     def status(self) -> dict[str, Any]:
         telemetry = self.latest_telemetry()
@@ -327,15 +359,60 @@ class FirmwareTransport:
             "arming_only": int(self._read_param_value("ARMING_ONLY")),
             "controlled_motion": int(self._read_param_value("CONTROLLED_MOTION")),
             "run_allowed": int(self._read_param_value("RUN_ALLOWED")),
+            "enabled": int(self._read_param_value("ENABLED")),
+            "config_loaded": int(self._read_param_value("CONFIG_LOADED")),
+            "safe_integration": int(self._read_param_value("SAFE_INTEGRATION")),
+            "motion_implemented": int(self._read_param_value("MOTION_IMPLEMENTED")),
             "position_um": int(self._read_param_value("POS")),
             "position_set_um": int(telemetry["pos_set_um"]),
             "brake_installed": int(self._read_config("BRAKE_INSTALLED")),
+            "collision_sensor_installed": int(self._read_config("COLLISION_SENSOR_INSTALLED")),
+            "ptc_installed": int(self._read_config("PTC_INSTALLED")),
+            "backup_supply_installed": int(self._read_config("BACKUP_SUPPLY_INSTALLED")),
+            "external_interlock_installed": int(self._read_config("EXTERNAL_INTERLOCK_INSTALLED")),
             "ignore_brake_feedback": int(self._read_config("IGNORE_BRAKE_FEEDBACK")),
+            "ignore_collision_sensor": int(self._read_config("IGNORE_COLLISION_SENSOR")),
+            "ignore_external_interlock": int(self._read_config("IGNORE_EXTERNAL_INTERLOCK")),
+            "allow_motion_without_calibration": int(self._read_config("ALLOW_MOTION_WITHOUT_CALIBRATION")),
             "calib_valid": int(self._read_config("CALIB_VALID")),
             "max_current": float(self._read_param("MAX_CURRENT")),
+            "max_current_peak": float(self._read_param("MAX_CURRENT_PEAK")),
             "max_velocity": float(self._read_param("MAX_VELOCITY")),
+            "max_acceleration": float(self._read_param("MAX_ACCELERATION")),
             "soft_min_pos": int(self._read_param("SOFT_MIN_POS")),
             "soft_max_pos": int(self._read_param("SOFT_MAX_POS")),
+            "calib_zero_pos": int(self._read_param("CALIB_ZERO_POS")),
+            "calib_pitch_um": float(self._read_param("CALIB_PITCH_UM")),
+            "calib_sign": int(self._read_param("CALIB_SIGN")),
+        }
+
+    def debug_vars(self) -> dict[str, Any]:
+        status = self.status()
+        telemetry = self.latest_telemetry()
+        events = self.recent_events(limit=16)
+
+        return {
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "transport": {
+                "port": self._port,
+                "baudrate": self._baudrate,
+                "read_timeout_s": self._read_timeout_s,
+                "command_timeout_s": self._command_timeout_s,
+                "heartbeat_interval_s": self._heartbeat_interval_s,
+                "connected": self._serial is not None,
+                "seconds_since_activity": round(time.monotonic() - self._last_activity_monotonic, 3),
+                "event_cache_depth": len(self._events),
+            },
+            "firmware_version": self.version_info(),
+            "status": status,
+            "telemetry": telemetry,
+            "events_recent": events,
+            "log_store": self._log_store.stats() if self._log_store is not None else {"enabled": False},
+            "protocol_exports": {
+                "status_fields": sorted(status.keys()),
+                "telemetry_fields": sorted(telemetry.keys()),
+                "event_fields": ["ts_ms", "code", "value"],
+            },
         }
 
     def send_ok_command(self, line: str) -> dict[str, bool | str]:

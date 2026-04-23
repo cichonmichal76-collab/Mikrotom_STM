@@ -100,6 +100,11 @@ def api_events_recent(limit: int = 24):
     return _handle_firmware_call(lambda: _transport().recent_events(limit=limit))
 
 
+@app.get("/api/debug/vars")
+def api_debug_vars():
+    return _handle_firmware_call(lambda: _transport().debug_vars())
+
+
 @app.post("/api/cmd/enable")
 def api_cmd_enable():
     return _handle_firmware_call(lambda: _transport().send_ok_command("CMD ENABLE"))
@@ -118,6 +123,11 @@ def api_cmd_stop():
 @app.post("/api/cmd/qstop")
 def api_cmd_qstop():
     return _handle_firmware_call(lambda: _transport().send_ok_command("CMD QSTOP"))
+
+
+@app.post("/api/cmd/ack-fault")
+def api_cmd_ack_fault():
+    return _handle_firmware_call(lambda: _transport().send_ok_command("CMD ACK_FAULT"))
 
 
 @app.post("/api/cmd/move-rel")

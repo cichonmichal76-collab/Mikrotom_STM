@@ -13,6 +13,7 @@
 #include "eventlog.h"
 #include "motorState.h"
 #include "config_store.h"
+#include "app_build_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -155,6 +156,14 @@ static void handle_get_simple(const char *arg1)
         protocol_rsp_config_u8("CONTROLLED_MOTION", Commissioning_ControlledMotion());
     else if (strcmp(arg1, "RUN_ALLOWED") == 0)
         protocol_rsp_config_u8("RUN_ALLOWED", AxisControl_RunAllowed());
+    else if (strcmp(arg1, "ENABLED") == 0)
+        protocol_rsp_config_u8("ENABLED", state.enabled ? 1u : 0u);
+    else if (strcmp(arg1, "CONFIG_LOADED") == 0)
+        protocol_rsp_config_u8("CONFIG_LOADED", ConfigStore_IsLoaded());
+    else if (strcmp(arg1, "SAFE_INTEGRATION") == 0)
+        protocol_rsp_config_u8("SAFE_INTEGRATION", APP_SAFE_INTEGRATION ? 1u : 0u);
+    else if (strcmp(arg1, "MOTION_IMPLEMENTED") == 0)
+        protocol_rsp_config_u8("MOTION_IMPLEMENTED", APP_MOTION_IMPLEMENTED ? 1u : 0u);
     else if (strcmp(arg1, "POS") == 0)
         protocol_rsp_param_i32("POS", (int32_t)state.pos_um);
     else if (strcmp(arg1, "EVENT_COUNT") == 0)
@@ -317,7 +326,7 @@ static void handle_cmd(const char *arg1, const char *arg2)
     else if (strcmp(arg1, "DISABLE") == 0) { if (AxisControl_Disable()) protocol_rsp_ok(); else protocol_rsp_err("DISABLE_REJECTED"); }
     else if (strcmp(arg1, "STOP") == 0) { if (AxisControl_Stop()) protocol_rsp_ok(); else protocol_rsp_err("STOP_REJECTED"); }
     else if (strcmp(arg1, "QSTOP") == 0) { if (AxisControl_QStop()) protocol_rsp_ok(); else protocol_rsp_err("QSTOP_REJECTED"); }
-    else if (strcmp(arg1, "ACK_FAULT") == 0) { Fault_ClearAll(); AxisState_Set(AXIS_SAFE); protocol_rsp_ok(); }
+    else if (strcmp(arg1, "ACK_FAULT") == 0) { Fault_ClearAll(); AxisControl_RefreshState(); protocol_rsp_ok(); }
     else if (strcmp(arg1, "CALIB_ZERO") == 0)
     {
         AxisState_Set(AXIS_CALIBRATION);

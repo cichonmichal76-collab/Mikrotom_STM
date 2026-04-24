@@ -1,0 +1,32 @@
+MIKROTOM - WARIANT B - START HERE
+=================================
+
+Ten pakiet sluzy do:
+- wgrania firmware SAFE INTEGRATION do MCU,
+- uruchomienia Agenta i GUI na drugim komputerze,
+- sprawdzenia komunikacji, safety, logow i commissioning,
+- przygotowania systemu pod przyszly firmware z realnym ruchem.
+
+UWAGA:
+- aktualny firmware NIE jest jeszcze finalnym buildem ruchowym,
+- brak ruchu po uruchomieniu jest wynikiem prawidlowym,
+- RUN_ALLOWED powinno pozostac zablokowane.
+
+Najprostsza kolejnosc:
+
+1. Uruchom 01_SPRAWDZ_WYMAGANIA*.bat
+2. Jesli trzeba - uruchom 02_INSTALUJ_PC.bat
+3. Wgraj firmware: 03_WGRAJ_MCU_STLINK.bat
+4. Ustaw GUI LIVE: 04_USTAW_GUI_LIVE.bat
+5. Uruchom Agenta: 05_URUCHOM_AGENT.bat
+6. Uruchom GUI: 06_URUCHOM_GUI.bat
+7. Otworz dokumentacje: 07_OTWORZ_DOKUMENTACJE.bat
+
+Wazne:
+- COM port USB-UART sprawdzasz w Menedzerze urzadzen Windows.
+- Do flashowania MCU potrzebny jest STM32CubeProgrammer i ST-LINK.
+- Do dzialania GUI/Agenta potrzebny jest Python 3.12+.
+
+Pelny przewodnik otworz:
+- Wariant_B_Przewodnik_Kompletny.html
+

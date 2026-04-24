@@ -31,6 +31,9 @@ Architecture note:
 - the HMI packet contract is documented in `docs/HMI_Protocol.md`
 - the software evolution from the original FOC-centric firmware to the safety and GUI-oriented system is documented in `docs/STM32_Software_Evolution.md`
 - the staged bench bring-up sequence is documented in `docs/STM32_Bringup_Checklist.md`
+- the first-time installation guide for the target PC/MCU setup is documented in `docs/Wariant_B_Instalacja_i_Pierwsze_Uruchomienie.md`
+- the operator GUI manual in Polish is documented in `docs/Wariant_B_Manual_Uzytkownika_GUI.md`
+- the novice-friendly all-in-one HTML guide is documented in `docs/Wariant_B_Przewodnik_Kompletny.html`
 - a recommended future project layout is scaffolded under `firmware/Core/`
 
 Quick PC setup:
@@ -45,3 +48,4 @@ MCU firmware:
 - generated HEX/BIN files are in `dist/mcu/`
 - regenerate them with `scripts\build_mcu_release.bat`
 - flash with `scripts\flash_mcu_stlink.bat`
+- create ready-to-share Variant B deployment packages with `scripts\prepare_variant_b_packages.bat`

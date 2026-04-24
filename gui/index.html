@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mikrotom Safety + Motion GUI</title>
+  <title>Mikrotom - panel ruchu i bezpieczeństwa</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -17,46 +17,68 @@
     <header class="hero panel reveal">
       <div class="hero-copy">
         <div class="eyebrow">STM32 + Agent + GUI + HMI</div>
-        <h1>Mikrotom Safety and Motion Console</h1>
+        <h1>Konsola ruchu i bezpieczeństwa Mikrotom</h1>
         <p>
-          Operator GUI for dashboard monitoring, commissioning workflow, safety
-          awareness, motion control, event review, and service access.
+          Panel operatorski do podglądu online, uruchamiania etapowego,
+          kontroli bezpieczeństwa, sterowania osią, przeglądu zdarzeń i dostępu serwisowego.
         </p>
       </div>
       <div class="badge-stack">
-        <div id="badge-connection" class="badge" data-tone="muted">Connection unknown</div>
-        <div id="badge-state" class="badge" data-tone="muted">Axis --</div>
-        <div id="badge-fault" class="badge" data-tone="muted">Fault --</div>
+        <div id="badge-connection" class="badge" data-tone="muted">Połączenie nieznane</div>
+        <div id="badge-state" class="badge" data-tone="muted">Oś --</div>
+        <div id="badge-fault" class="badge" data-tone="muted">Błąd --</div>
         <div id="badge-run" class="badge" data-tone="muted">RUN_ALLOWED --</div>
-        <div id="badge-stage" class="badge" data-tone="muted">Stage --</div>
+        <div id="badge-stage" class="badge" data-tone="muted">Etap --</div>
       </div>
     </header>
 
-    <main class="layout">
-      <section class="column column-main">
-        <section class="panel reveal">
+    <nav class="top-menu panel reveal" aria-label="Główne sekcje GUI">
+      <a href="#online">Podgląd online</a>
+      <a href="#global">Ustawienia globalne</a>
+      <a href="#safety">Bezpieczeństwo</a>
+      <a href="#uart">UART</a>
+      <a href="#logs">Logi</a>
+      <a href="#sql">SQL</a>
+      <a href="#api">API</a>
+      <button id="btn-theme-toggle" class="theme-toggle" type="button">Motyw: ciemny</button>
+      <button id="btn-help-toggle" class="help-toggle" type="button" aria-pressed="false">Help OFF</button>
+    </nav>
+
+    <main class="sections-layout">
+      <section id="online" class="section-block reveal">
+        <div class="section-title">
+          <div>
+            <div class="panel-kicker">Podgląd online</div>
+            <h2>Stan pracy, telemetria i tor ruchu</h2>
+          </div>
+          <p class="panel-note">To jest ekran operatorski do bieżącego nadzoru osi.</p>
+        </div>
+
+        <div class="layout">
+          <section class="column column-main">
+            <section class="panel">
           <div class="panel-head">
             <div>
-              <div class="panel-kicker">Dashboard</div>
-              <h2>Live system state</h2>
+              <div class="panel-kicker">Panel online</div>
+              <h2>Aktualny stan systemu</h2>
             </div>
-            <p id="connection-detail" class="panel-note">Source unavailable</p>
+            <p id="connection-detail" class="panel-note">Źródło niedostępne</p>
           </div>
           <div class="kpi-grid">
             <article class="kpi">
-              <span>Position</span>
+              <span>Pozycja</span>
               <strong id="kpi-pos">0 um</strong>
             </article>
             <article class="kpi">
-              <span>Position setpoint</span>
+              <span>Pozycja zadana</span>
               <strong id="kpi-pos-set">0 um</strong>
             </article>
             <article class="kpi">
-              <span>Velocity</span>
+              <span>Prędkość</span>
               <strong id="kpi-vel">0 um/s</strong>
             </article>
             <article class="kpi">
-              <span>Iq current</span>
+              <span>Prąd Iq</span>
               <strong id="kpi-iq">0 mA</strong>
             </article>
             <article class="kpi">
@@ -65,181 +87,141 @@
             </article>
           </div>
           <div class="status-list" id="status-list"></div>
-        </section>
+            </section>
 
-        <section class="panel reveal">
+            <section class="panel">
           <div class="panel-head">
             <div>
-              <div class="panel-kicker">Axis visualization</div>
-              <h2>Motion envelope</h2>
+              <div class="panel-kicker">Wizualizacja osi</div>
+              <h2>Obszar ruchu</h2>
             </div>
-            <p class="panel-note">Blue is live position, green is target, yellow is safe range.</p>
+            <p class="panel-note">Niebieski oznacza pozycję aktualną, zielony cel, żółty bezpieczny zakres.</p>
           </div>
           <div class="axis-frame">
             <svg id="axis-svg" class="axis-svg" viewBox="0 0 1040 220" preserveAspectRatio="none"></svg>
           </div>
           <div class="legend">
-            <div class="legend-item"><span class="legend-dot live"></span>Current position</div>
-            <div class="legend-item"><span class="legend-dot target"></span>Target</div>
-            <div class="legend-item"><span class="legend-dot limits"></span>Soft limits</div>
-            <div class="legend-item"><span class="legend-dot fault"></span>Fault or unsafe</div>
+            <div class="legend-item"><span class="legend-dot live"></span>Pozycja aktualna</div>
+            <div class="legend-item"><span class="legend-dot target"></span>Cel</div>
+            <div class="legend-item"><span class="legend-dot limits"></span>Limity programowe</div>
+            <div class="legend-item"><span class="legend-dot fault"></span>Błąd albo stan niebezpieczny</div>
           </div>
-        </section>
+            </section>
 
-        <section class="panel reveal">
+            <section class="panel">
           <div class="panel-head">
             <div>
-              <div class="panel-kicker">Axis control</div>
-              <h2>Operator actions</h2>
+              <div class="panel-kicker">Sterowanie osią</div>
+              <h2>Akcje operatora</h2>
             </div>
-            <p class="panel-note">STOP and QSTOP remain available at all times.</p>
+            <p class="panel-note">STOP i QSTOP pozostają dostępne zawsze.</p>
           </div>
           <div class="warning-box" id="move-warning">
-            Motion is blocked until commissioning and safety conditions are satisfied.
+            Ruch jest zablokowany do czasu spełnienia warunków uruchomienia i bezpieczeństwa.
           </div>
           <div class="button-row primary-actions">
-            <button id="btn-enable" class="btn tone-ok">ENABLE</button>
-            <button id="btn-disable" class="btn tone-muted">DISABLE</button>
-            <button id="btn-ack-fault" class="btn tone-muted">ACK_FAULT</button>
+            <button id="btn-enable" class="btn tone-ok">Włącz (ENABLE)</button>
+            <button id="btn-disable" class="btn tone-muted">Wyłącz (DISABLE)</button>
+            <button id="btn-ack-fault" class="btn tone-muted">Potwierdź błąd (ACK_FAULT)</button>
             <button id="btn-stop" class="btn tone-warn">STOP</button>
             <button id="btn-qstop" class="btn tone-danger">QSTOP</button>
           </div>
           <div class="form-grid">
             <label class="field">
-              <span>MOVE_REL [um]</span>
+              <span>Ruch względny MOVE_REL [um]</span>
               <input id="move-rel" type="number" value="100" />
             </label>
             <label class="field">
-              <span>MOVE_ABS [um]</span>
+              <span>Ruch bezwzględny MOVE_ABS [um]</span>
               <input id="move-abs" type="number" value="0" />
             </label>
           </div>
           <div class="button-row">
-            <button id="btn-move-rel" class="btn">Execute MOVE_REL</button>
-            <button id="btn-move-abs" class="btn">Execute MOVE_ABS</button>
+            <button id="btn-move-rel" class="btn">Wykonaj MOVE_REL</button>
+            <button id="btn-move-abs" class="btn">Wykonaj MOVE_ABS</button>
             <button id="btn-calib-zero" class="btn tone-muted">CALIB_ZERO</button>
           </div>
-        </section>
+            </section>
+          </section>
 
-        <section class="panel reveal">
+          <section class="column column-side">
+            <section class="panel">
           <div class="panel-head">
             <div>
-              <div class="panel-kicker">Commissioning</div>
-              <h2>Stage workflow</h2>
+              <div class="panel-kicker">Uruchamianie etapowe</div>
+              <h2>Przebieg etapów</h2>
             </div>
-            <p class="panel-note">The GUI is a soft safety layer. Final safety remains in firmware.</p>
+            <p class="panel-note">GUI jest warstwą operatorską. Ostateczna decyzja bezpieczeństwa zostaje w firmware.</p>
           </div>
           <div class="stage-grid">
             <article id="stage-1-card" class="stage-card">
-              <div class="stage-label">Stage 1</div>
-              <h3>SAFE</h3>
-              <p>No motion. Diagnostic checks only.</p>
-              <label><input type="checkbox" class="stage1-check" /> Communication path checked</label>
-              <label><input type="checkbox" class="stage1-check" /> Fault reaction verified</label>
-              <label><input type="checkbox" class="stage1-check" /> Axis kept stationary</label>
-              <button id="btn-stage-1" class="btn">Activate Stage 1</button>
+              <div class="stage-label">Etap 1</div>
+              <h3>BEZPIECZNY</h3>
+              <p>Brak ruchu. Tylko diagnostyka.</p>
+              <label><input type="checkbox" class="stage1-check" /> Tor komunikacji sprawdzony</label>
+              <label><input type="checkbox" class="stage1-check" /> Reakcja na błąd zweryfikowana</label>
+              <label><input type="checkbox" class="stage1-check" /> Oś pozostaje nieruchoma</label>
+              <button id="btn-stage-1" class="btn">Aktywuj etap 1</button>
             </article>
             <article id="stage-2-card" class="stage-card">
-              <div class="stage-label">Stage 2</div>
-              <h3>ARMING</h3>
-              <p>Enable and disable may be tested without full motion.</p>
-              <label><input type="checkbox" class="stage2-check" /> Mechanics checked</label>
-              <label><input type="checkbox" class="stage2-check" /> Collision zone clear</label>
-              <label><input type="checkbox" class="stage2-check" /> Operator ready for STOP/QSTOP</label>
-              <button id="btn-stage-2" class="btn">Activate Stage 2</button>
+              <div class="stage-label">Etap 2</div>
+              <h3>UZBRAJANIE</h3>
+              <p>Można testować ENABLE/DISABLE bez pełnego ruchu.</p>
+              <label><input type="checkbox" class="stage2-check" /> Mechanika sprawdzona</label>
+              <label><input type="checkbox" class="stage2-check" /> Strefa kolizji wolna</label>
+              <label><input type="checkbox" class="stage2-check" /> Operator gotowy na STOP/QSTOP</label>
+              <button id="btn-stage-2" class="btn">Aktywuj etap 2</button>
             </article>
             <article id="stage-3-card" class="stage-card">
-              <div class="stage-label">Stage 3</div>
-              <h3>CONTROLLED MOTION</h3>
-              <p>Motion allowed, still limited by safety rules.</p>
-              <label><input type="checkbox" class="stage3-check" /> Calibration confirmed</label>
-              <label><input type="checkbox" class="stage3-check" /> Conservative limits applied</label>
-              <label><input type="checkbox" class="stage3-check" /> Operator in supervision</label>
-              <button id="btn-stage-3" class="btn">Activate Stage 3</button>
+              <div class="stage-label">Etap 3</div>
+              <h3>RUCH KONTROLOWANY</h3>
+              <p>Ruch dopuszczony, nadal ograniczony regułami bezpieczeństwa.</p>
+              <label><input type="checkbox" class="stage3-check" /> Kalibracja potwierdzona</label>
+              <label><input type="checkbox" class="stage3-check" /> Limity zachowawcze ustawione</label>
+              <label><input type="checkbox" class="stage3-check" /> Operator nadzoruje uruchomienie</label>
+              <button id="btn-stage-3" class="btn">Aktywuj etap 3</button>
             </article>
           </div>
-        </section>
+            </section>
+          </section>
+        </div>
       </section>
 
-      <section class="column column-side">
-        <section class="panel reveal">
+      <section id="global" class="section-block reveal">
+        <div class="section-title">
+          <div>
+            <div class="panel-kicker">Ustawienia globalne</div>
+            <h2>Parametry osi i konfiguracja bazowa</h2>
+          </div>
+          <p class="panel-note">Tutaj trzymamy limity i parametry, które nie są awaryjnymi obejściami zabezpieczeń.</p>
+        </div>
+
+        <section class="panel">
           <div class="panel-head">
             <div>
-              <div class="panel-kicker">Safety panel</div>
-              <h2>Config and overrides</h2>
+              <div class="panel-kicker">Konfiguracja globalna</div>
+              <h2>Flagi pracy i limity ruchu</h2>
             </div>
-            <p class="panel-note">Overrides must remain explicit and deliberate.</p>
+            <p class="panel-note">Zmiany są wysyłane przez Agent API do firmware po UART.</p>
           </div>
-          <div class="switch-row readonly">
-            <div>
-              <strong>Config store loaded</strong>
-              <span>Read-only flash load status</span>
+
+          <div class="settings-grid">
+            <div class="switch-row readonly">
+              <div>
+                <strong>Konfiguracja załadowana</strong>
+                <span>Status odczytu z flash, tylko do podglądu</span>
+              </div>
+              <input id="cfg-config-loaded" type="checkbox" disabled />
             </div>
-            <input id="cfg-config-loaded" type="checkbox" disabled />
-          </div>
-          <div class="switch-row readonly">
-            <div>
-              <strong>Axis enabled</strong>
-              <span>Read-only runtime enable state</span>
+            <div class="switch-row readonly">
+              <div>
+                <strong>Oś włączona</strong>
+                <span>Stan ENABLE w czasie pracy, tylko do podglądu</span>
+              </div>
+              <input id="cfg-enabled" type="checkbox" disabled />
             </div>
-            <input id="cfg-enabled" type="checkbox" disabled />
           </div>
-          <div class="switch-row">
-            <div>
-              <strong>Brake installed</strong>
-              <span>Hardware presence flag</span>
-            </div>
-            <input id="cfg-brake-installed" type="checkbox" />
-          </div>
-          <div class="switch-row">
-            <div>
-              <strong>Collision sensor installed</strong>
-              <span>Hardware presence flag</span>
-            </div>
-            <input id="cfg-collision-installed" type="checkbox" />
-          </div>
-          <div class="switch-row">
-            <div>
-              <strong>External interlock installed</strong>
-              <span>Machine interlock presence flag</span>
-            </div>
-            <input id="cfg-external-interlock-installed" type="checkbox" />
-          </div>
-          <div class="switch-row">
-            <div>
-              <strong>Ignore brake feedback</strong>
-              <span>Temporary test override only</span>
-            </div>
-            <input id="cfg-ignore-brake" type="checkbox" />
-          </div>
-          <div class="switch-row">
-            <div>
-              <strong>Ignore collision sensor</strong>
-              <span>Temporary commissioning override</span>
-            </div>
-            <input id="cfg-ignore-collision" type="checkbox" />
-          </div>
-          <div class="switch-row">
-            <div>
-              <strong>Ignore external interlock</strong>
-              <span>Temporary commissioning override</span>
-            </div>
-            <input id="cfg-ignore-interlock" type="checkbox" />
-          </div>
-          <div class="switch-row">
-            <div>
-              <strong>Allow motion without calibration</strong>
-              <span>Explicit override for controlled testing only</span>
-            </div>
-            <input id="cfg-allow-no-calib" type="checkbox" />
-          </div>
-          <div class="switch-row readonly">
-            <div>
-              <strong>Calibration valid</strong>
-              <span>Read-only status from firmware</span>
-            </div>
-            <input id="cfg-calib-valid" type="checkbox" disabled />
-          </div>
+
           <div class="form-grid">
             <label class="field">
               <span>MAX_CURRENT [A]</span>
@@ -267,55 +249,232 @@
             </label>
           </div>
           <div class="button-row">
-            <button id="btn-save-safety" class="btn">Send safety parameters</button>
+            <button id="btn-save-safety" class="btn">Wyślij parametry globalne</button>
           </div>
         </section>
+      </section>
 
-        <section class="panel reveal">
+      <section id="safety" class="section-block reveal">
+        <div class="section-title">
+          <div>
+            <div class="panel-kicker">Bezpieczeństwo</div>
+            <h2>Zabezpieczenia, czujniki i obejścia</h2>
+          </div>
+          <p class="panel-note">Obejścia są jawne, bo ich przypadkowe włączenie jest ryzykiem dla urządzenia.</p>
+        </div>
+
+        <section class="panel">
           <div class="panel-head">
             <div>
-              <div class="panel-kicker">Event log</div>
-              <h2>Recent events</h2>
+              <div class="panel-kicker">Panel bezpieczeństwa</div>
+              <h2>Konfiguracja i obejścia</h2>
             </div>
-            <p class="panel-note">Examples: BOOT, ENABLE, STOP, FAULT_SET, CALIB_OK.</p>
+            <p class="panel-note">Firmware nadal podejmuje finalną decyzję RUN_ALLOWED.</p>
+          </div>
+          <div class="settings-grid">
+            <div class="switch-row">
+              <div>
+                <strong>Hamulec zainstalowany</strong>
+                <span>Flaga obecności sprzętu</span>
+              </div>
+              <input id="cfg-brake-installed" type="checkbox" />
+            </div>
+            <div class="switch-row">
+              <div>
+                <strong>Czujnik kolizji zainstalowany</strong>
+                <span>Flaga obecności sprzętu</span>
+              </div>
+              <input id="cfg-collision-installed" type="checkbox" />
+            </div>
+            <div class="switch-row">
+              <div>
+                <strong>Zewnętrzna blokada zainstalowana</strong>
+                <span>Flaga obecności blokady maszyny</span>
+              </div>
+              <input id="cfg-external-interlock-installed" type="checkbox" />
+            </div>
+            <div class="switch-row">
+              <div>
+                <strong>Ignoruj sygnał zwrotny hamulca</strong>
+                <span>Tylko tymczasowe obejście testowe</span>
+              </div>
+              <input id="cfg-ignore-brake" type="checkbox" />
+            </div>
+            <div class="switch-row">
+              <div>
+                <strong>Ignoruj czujnik kolizji</strong>
+                <span>Tymczasowe obejście uruchomieniowe</span>
+              </div>
+              <input id="cfg-ignore-collision" type="checkbox" />
+            </div>
+            <div class="switch-row">
+              <div>
+                <strong>Ignoruj zewnętrzną blokadę</strong>
+                <span>Tymczasowe obejście uruchomieniowe</span>
+              </div>
+              <input id="cfg-ignore-interlock" type="checkbox" />
+            </div>
+            <div class="switch-row">
+              <div>
+                <strong>Pozwól na ruch bez kalibracji</strong>
+                <span>Jawne obejście tylko do kontrolowanych testów</span>
+              </div>
+              <input id="cfg-allow-no-calib" type="checkbox" />
+            </div>
+            <div class="switch-row readonly">
+              <div>
+                <strong>Kalibracja ważna</strong>
+                <span>Status z firmware, tylko do podglądu</span>
+              </div>
+              <input id="cfg-calib-valid" type="checkbox" disabled />
+            </div>
+          </div>
+          <div class="button-row">
+            <button id="btn-save-safety-overrides" class="btn tone-warn">Wyślij konfigurację bezpieczeństwa</button>
+          </div>
+        </section>
+      </section>
+
+      <section id="uart" class="section-block reveal">
+        <div class="section-title">
+          <div>
+            <div class="panel-kicker">UART</div>
+            <h2>Połączenie PC Agent - STM32</h2>
+          </div>
+          <p class="panel-note">Agent utrzymuje port COM, sygnał życia i parser ramek TEL/RSP/EVT.</p>
+        </div>
+
+        <section class="panel">
+          <div class="diagnostic-grid">
+            <article class="diagnostic-card">
+              <span>Port szeregowy</span>
+              <strong id="uart-port">COM?</strong>
+              <p>Ustawiany przez <code>MIKROTOM_SERIAL_PORT</code> albo argument <code>run_agent.bat COMx</code>.</p>
+            </article>
+            <article class="diagnostic-card">
+              <span>Prędkość transmisji</span>
+              <strong id="uart-baud">115200</strong>
+              <p>Domyślnie <code>115200</code>, zgodnie ze skryptem Agenta.</p>
+            </article>
+            <article class="diagnostic-card">
+              <span>Połączenie</span>
+              <strong id="uart-connected">--</strong>
+              <p>Pokazuje stan widziany przez API/GUI.</p>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <section id="logs" class="section-block reveal">
+        <div class="section-title">
+          <div>
+            <div class="panel-kicker">Podgląd logów</div>
+            <h2>Zdarzenia firmware i ostatnie reakcje systemu</h2>
+          </div>
+          <p class="panel-note">Tu widzimy BOOT, ENABLE, STOP, FAULT_SET, CALIB_OK i inne zdarzenia.</p>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-kicker">Log zdarzeń</div>
+              <h2>Ostatnie zdarzenia</h2>
+            </div>
+            <p class="panel-note">Przykłady: BOOT, ENABLE, STOP, FAULT_SET, CALIB_OK.</p>
           </div>
           <div class="table-wrap">
             <table class="events-table">
               <thead>
                 <tr>
-                  <th>MCU time</th>
-                  <th>Code</th>
-                  <th>Value</th>
+                  <th>Czas MCU</th>
+                  <th>Kod</th>
+                  <th>Wartość</th>
                 </tr>
               </thead>
               <tbody id="events-body"></tbody>
             </table>
           </div>
         </section>
+      </section>
 
-        <section class="panel reveal">
+      <section id="sql" class="section-block reveal">
+        <div class="section-title">
+          <div>
+            <div class="panel-kicker">SQL</div>
+            <h2>Lokalna baza logów Agenta</h2>
+          </div>
+          <p class="panel-note">SQLite zapisuje protokół UART, telemetrię i zdarzenia do pliku lokalnego.</p>
+        </div>
+
+        <section class="panel">
+          <div class="diagnostic-grid">
+            <article class="diagnostic-card">
+              <span>SQL włączony</span>
+              <strong id="sql-enabled">--</strong>
+              <p>Wyłączenie: <code>MIKROTOM_SQLITE_PATH=off</code>.</p>
+            </article>
+            <article class="diagnostic-card wide">
+              <span>Ścieżka bazy danych</span>
+              <strong id="sql-path">agent/mikrotom_agent.sqlite3</strong>
+              <p>Domyślna lokalizacja bazy tworzonej przez Agenta.</p>
+            </article>
+            <article class="diagnostic-card">
+              <span>Wiersze</span>
+              <strong id="sql-counts">--</strong>
+              <p>Wiersze protokołu / telemetrii / zdarzeń.</p>
+            </article>
+          </div>
+          <div class="button-row">
+            <button id="btn-refresh-diagnostics" class="btn">Odśwież diagnostykę UART / SQL</button>
+          </div>
+        </section>
+      </section>
+
+      <section id="api" class="section-block reveal">
+        <div class="section-title">
+          <div>
+            <div class="panel-kicker">API</div>
+            <h2>Endpointy i dostęp serwisowy</h2>
+          </div>
+          <p class="panel-note">GUI rozmawia z Agentem HTTP, a Agent tłumaczy komendy na UART.</p>
+        </div>
+
+        <div class="layout">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <div class="panel-kicker">Mapa API</div>
+                <h2>Dostępne endpointy</h2>
+              </div>
+              <p id="api-base" class="panel-note">API --</p>
+            </div>
+            <div class="api-list" id="api-endpoints"></div>
+          </section>
+
+          <section class="panel">
           <div class="panel-head">
             <div>
-              <div class="panel-kicker">Service panel</div>
-              <h2>Raw command access</h2>
+              <div class="panel-kicker">Panel serwisowy</div>
+              <h2>Dostęp do komend surowych</h2>
             </div>
-            <p class="panel-note">The GUI does not bypass firmware safety.</p>
+            <p class="panel-note">GUI nie omija zabezpieczeń firmware.</p>
           </div>
           <label class="field">
-            <span>RAW command</span>
+            <span>Komenda RAW</span>
             <input id="raw-command" type="text" value="CMD CALIB_ZERO" />
           </label>
           <div class="button-row">
-            <button id="btn-send-raw" class="btn tone-muted">Send RAW</button>
-            <button id="btn-refresh" class="btn">Refresh</button>
+            <button id="btn-send-raw" class="btn tone-muted">Wyślij RAW</button>
+            <button id="btn-refresh" class="btn">Odśwież</button>
           </div>
-        </section>
+          </section>
+        </div>
       </section>
     </main>
 
     <footer class="footer panel reveal">
       <div id="footer-left">API --</div>
-      <div id="footer-right">Mode --</div>
+      <div id="footer-right">Tryb --</div>
     </footer>
   </div>
 

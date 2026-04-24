@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mikrotom GUI Capture</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0b1220;
+      font-family: Arial, sans-serif;
+    }
+
+    .frame-wrap {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #0b1220;
+    }
+
+    iframe {
+      width: 1440px;
+      height: 2200px;
+      border: 0;
+      transform-origin: top left;
+      background: #0b1220;
+    }
+  </style>
+</head>
+<body>
+  <div class="frame-wrap">
+    <iframe id="app-frame" src="/gui/"></iframe>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const sectionId = params.get("section") || "online";
+    const frame = document.getElementById("app-frame");
+
+    function positionSection(doc, win) {
+      const hero = doc.querySelector(".hero");
+      if (hero) {
+        hero.style.display = "none";
+      }
+
+      const target = doc.getElementById(sectionId);
+      if (target) {
+        const topMenu = doc.querySelector(".top-menu");
+        const offset = topMenu ? topMenu.getBoundingClientRect().height + 28 : 96;
+        const targetTop = target.getBoundingClientRect().top + win.scrollY;
+        win.scrollTo(0, Math.max(0, targetTop - offset));
+      } else {
+        win.scrollTo(0, 0);
+      }
+
+      const body = doc.body;
+      if (body) {
+        body.style.margin = "0";
+        body.style.paddingBottom = "1400px";
+      }
+    }
+
+    frame.addEventListener("load", () => {
+      const doc = frame.contentDocument;
+      const win = frame.contentWindow;
+
+      if (!doc || !win) {
+        return;
+      }
+
+      const applyPosition = () => positionSection(doc, win);
+      applyPosition();
+      win.setTimeout(applyPosition, 300);
+      win.setTimeout(applyPosition, 900);
+    });
+  </script>
+</body>
+</html>

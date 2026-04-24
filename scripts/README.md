@@ -10,6 +10,12 @@ scripts\install_pc.bat
 
 This creates `.venv` and installs the local agent dependencies.
 
+Prerequisite check:
+
+```bat
+scripts\check_variant_b_prerequisites.bat
+```
+
 ## GUI Mode
 
 Live mode:
@@ -30,6 +36,12 @@ Agent:
 
 ```bat
 scripts\run_agent.bat COM3
+```
+
+Interactive COM prompt:
+
+```bat
+scripts\run_agent_prompt.bat
 ```
 
 GUI:
@@ -56,4 +68,12 @@ Flash through ST-LINK and STM32CubeProgrammer:
 
 ```bat
 scripts\flash_mcu_stlink.bat
+```
+
+## Deployment Packages
+
+Prepare ready-to-share Variant B deployment packages:
+
+```bat
+scripts\prepare_variant_b_packages.bat
 ```

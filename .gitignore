@@ -10,3 +10,9 @@ stm32_cubeide/*.hex
 stm32_cubeide/*.bin
 stm32_cubeide/*.map
 stm32_cubeide/*.list
+docs/online_test.png
+docs/online_test_crop.png
+docs/global_window.png
+docs/global_appwindow.png
+docs/capture_global_test.png
+dist/deployment/Mikrotom_Wariant_B_Pakiet_*/

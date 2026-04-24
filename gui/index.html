@@ -137,6 +137,7 @@
             </label>
           </div>
           <div class="button-row">
+            <button id="btn-home" class="btn tone-ok">HOME</button>
             <button id="btn-move-rel" class="btn">Wykonaj MOVE_REL</button>
             <button id="btn-move-abs" class="btn">Wykonaj MOVE_ABS</button>
             <button id="btn-calib-zero" class="btn tone-muted">CALIB_ZERO</button>
@@ -175,7 +176,8 @@
             <article id="stage-3-card" class="stage-card">
               <div class="stage-label">Etap 3</div>
               <h3>RUCH KONTROLOWANY</h3>
-              <p>Ruch dopuszczony, nadal ograniczony regułami bezpieczeństwa.</p>
+              <p>Najpierw HOME i weryfikacja feedbacku, dopiero potem mały ruch testowy.</p>
+              <label><input type="checkbox" class="stage3-check" /> Homing wykonany albo świadomie niewymagany</label>
               <label><input type="checkbox" class="stage3-check" /> Kalibracja potwierdzona</label>
               <label><input type="checkbox" class="stage3-check" /> Limity zachowawcze ustawione</label>
               <label><input type="checkbox" class="stage3-check" /> Operator nadzoruje uruchomienie</label>

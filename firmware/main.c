@@ -89,6 +89,7 @@ volatile float czasTrajektorii;
 #define APP_EXTERNAL_INTERLOCK_ACTIVE_STATE GPIO_PIN_RESET
 #endif
 static uint8_t g_homing_sequence_active = 0u;
+static uint8_t g_homing_request_pending = 0u;
 
 static void MotionOutputs_Disable(void)
 {
@@ -119,6 +120,7 @@ static void MotionControl_CompleteHoming(void)
         return;
     }
 
+    g_homing_request_pending = 0u;
     Calibration_SetZeroPosUm(0);
     Calibration_SetValid(1u);
     state.calibrated = 1u;
@@ -141,6 +143,7 @@ static void MotionControl_UpdateHomingState(void)
 
     if (state.HomingStarted && !state.HomingOngoing && !state.HomingSuccessful)
     {
+        g_homing_request_pending = 0u;
         g_homing_sequence_active = 0u;
         MotionOutputs_Disable();
     }
@@ -157,6 +160,7 @@ static void MotionControl_UpdateExternalInterlock(void)
 
     if (HAL_GPIO_ReadPin(PushButton_GPIO_Port, PushButton_Pin) == APP_EXTERNAL_INTERLOCK_ACTIVE_STATE)
     {
+        g_homing_request_pending = 0u;
         g_homing_sequence_active = 0u;
         state.enabled = 0u;
         Fault_Set(FAULT_ESTOP);
@@ -178,6 +182,23 @@ static void MotionControl_UpdateOutputInhibit(void)
     {
         MotionOutputs_Disable();
     }
+#endif
+}
+
+uint8_t MotionControl_RequestHoming(void)
+{
+#if APP_SAFE_INTEGRATION
+    return 0u;
+#else
+    if (Fault_IsActive()) return 0u;
+    if (g_homing_sequence_active) return 0u;
+    if (state.HomingOngoing) return 0u;
+    if (state.HomingSuccessful) return 1u;
+
+    g_homing_request_pending = 1u;
+    AxisState_Set(AXIS_CALIBRATION);
+    EventLog_Push(EVT_CALIB_START, 0);
+    return 1u;
 #endif
 }
 
@@ -303,8 +324,9 @@ int main(void)
   {
 #if !APP_SAFE_INTEGRATION
         MotionControl_UpdateExternalInterlock();
-        if (!Fault_IsActive() && !state.HomingStarted)
+        if (g_homing_request_pending && !Fault_IsActive() && !state.HomingStarted)
         {
+            g_homing_request_pending = 0u;
             g_homing_sequence_active = 1u;
             FOC_MotorHomeStart((MotorState*)&state, (FieldOrientedControl*)&foc);
         }
@@ -361,6 +383,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc)
                                    g_homing_sequence_active))
         {
             state.enabled = 0u;
+            g_homing_request_pending = 0u;
             g_homing_sequence_active = 0u;
             MotionOutputs_Disable();
             return;

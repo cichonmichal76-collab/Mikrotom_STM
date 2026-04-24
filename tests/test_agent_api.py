@@ -60,6 +60,7 @@ def test_agent_api_endpoints(api_client):
 
     assert api_client.post("/api/cmd/enable").json()["command"] == "CMD ENABLE"
     assert api_client.post("/api/cmd/ack-fault").json()["command"] == "CMD ACK_FAULT"
+    assert api_client.post("/api/cmd/home").json()["command"] == "CMD HOME"
     assert (
         api_client.post("/api/cmd/move-rel", json={"delta_um": 150}).json()["command"]
         == "CMD MOVE_REL 150"

@@ -1,211 +1,169 @@
-# Wariant B - instrukcja użytkownika GUI
+# Wariant B - instrukcja uzytkownika GUI
 
-Ta instrukcja opisuje sposób pracy z aplikacją operatorską `GUI` w projekcie Mikrotom.
+Ta instrukcja opisuje sposob pracy z aplikacja operatorska `GUI` w projekcie Mikrotom.
 
-Zrzuty poniżej pokazują aktualny interfejs. Układ ekranów w trybie `LIVE` jest taki sam jak w trybie `DEMO`; zmieniają się tylko dane pobierane z Agenta i STM32.
+Zrzuty ponizej pokazuja aktualny interfejs. Uklad ekranow w trybie `LIVE` jest taki sam jak w trybie `DEMO`. Zmieniaja sie tylko dane, bo w `LIVE` pochodza one z Agenta i STM32.
 
-## 1. Dlaczego to narzędzie powstało
+## 1. Do czego sluzy GUI
 
-Stary software sterownika skupiał się głównie na warstwie napędowej i sprzętowej.
+GUI nie jest sterownikiem mocy. GUI jest warstwa operatorsko-diagnostyczna.
 
-Nowe GUI powstało po to, aby operator i integrator mieli w jednym miejscu:
+Jego rola:
 
-- podgląd stanu systemu,
-- commissioning etapowy,
-- konfigurację parametrów,
-- konfigurację safety,
-- diagnostykę UART,
-- logi,
-- SQL,
-- mapę API,
-- panel serwisowy.
+- pokazac aktualny stan systemu,
+- pokazac safety i commissioning,
+- pozwolic ustawic parametry,
+- wyslac komendy do Agenta,
+- pokazac logi, SQL, UART i API,
+- uporzadkowac pierwsze uruchomienie urzadzenia.
 
-GUI jest więc narzędziem operatorsko-diagnostycznym, a nie samodzielnym sterownikiem mocy.
+Prawidlowy przeplyw:
+
+```text
+GUI -> HTTP API -> Agent -> UART -> STM32
+```
 
 ## 2. Co GUI robi, a czego nie robi
 
 GUI robi:
 
 - pokazuje statusy firmware,
-- wysyła komendy do Agenta,
-- pozwala ustawiać parametry,
+- wysyla komendy do Agenta,
 - wspiera commissioning,
-- ułatwia diagnostykę.
+- pomaga w diagnozie.
 
 GUI nie robi:
 
-- nie steruje sprzętem bezpośrednio,
+- nie steruje hardware bezposrednio,
 - nie omija safety,
-- nie zastępuje decyzji firmware,
-- nie daje prawa do ruchu tylko dlatego, że przycisk jest widoczny.
+- nie daje prawa do ruchu tylko dlatego, ze przycisk jest widoczny,
+- nie zastepuje decyzji firmware.
 
-Prawidłowy przepływ to:
+## 3. Gorna belka
 
-```text
-GUI -> HTTP API -> Agent -> UART -> STM32
-```
+Na gornej belce znajduja sie:
 
-## 3. Górna belka
+- zakladki aplikacji,
+- przelacznik motywu `ciemny/jasny`,
+- przelacznik `Help ON/OFF`.
 
-Na górnej belce znajdują się:
+### `Help ON`
 
-- zakładki aplikacji,
-- przełącznik motywu `ciemny/jasny`,
-- przełącznik `Help ON/OFF`.
+Po wlaczeniu:
 
-### Help ON
+- pojawiaja sie ikonki `?`,
+- po najechaniu widac opis znaczenia pola,
+- na koncu opisu jest referencja do zmiennej, funkcji albo endpointu.
 
-Po włączeniu:
+### `Help OFF`
 
-- pojawiają się ikony `?`,
-- po najechaniu widać opis znaczenia elementu,
-- na końcu opisu widoczna jest referencja do zmiennej, funkcji albo endpointu.
+Po wylaczeniu:
 
-### Help OFF
+- ikonki `?` znikaja,
+- dymki znikaja,
+- interfejs jest prostszy dla zwyklej pracy operatorskiej.
 
-Po wyłączeniu:
+## 4. Podglad online
 
-- ikonki `?` znikają,
-- dymki nie są pokazywane,
-- interfejs staje się prostszy dla zwykłej pracy operatorskiej.
+![Podglad online](images/online.png)
 
-## 4. Podgląd online
+To glowny ekran pracy. Znajdziesz tu:
 
-![Podgląd online](images/online.png)
-
-Zakładka `Podgląd online` jest głównym ekranem pracy.
-
-Znajdziesz tu:
-
-- status połączenia z Agentem,
+- status polaczenia,
 - stan osi,
 - fault,
 - `RUN_ALLOWED`,
 - etap uruchomienia,
-- KPI: pozycja, pozycja zadana, prędkość, prąd Iq, VBUS,
+- KPI,
 - statusy safety,
-- commissioning etapowy.
+- commissioning etapowy,
+- przyciski operatorskie.
 
-### Jak czytać ten ekran
+### Jak czytac ten ekran
 
-- `Połączenie OK` oznacza, że GUI ma kontakt ze źródłem danych,
-- `FAULT` pokazuje aktywny błąd firmware,
-- `RUN_ALLOWED` jest centralną zgodą firmware na ruch,
-- `VBUS` pokazuje napięcie magistrali zasilania,
-- statusy takie jak `Tryb bezpieczny`, `Kalibracja ważna` i `Ruch kontrolowany` pokazują logikę po stronie STM32.
+- `Polaczenie OK` oznacza, ze GUI ma kontakt ze zrodlem danych,
+- `Blad` pokazuje aktywny fault firmware,
+- `RUN_ALLOWED` jest centralna zgoda firmware na ruch,
+- `VBUS` pokazuje napiecie magistrali,
+- `SAFE_INTEGRATION` i `MOTION_IMPLEMENTED` mowia, jaki wariant firmware jest w MCU.
 
-### Co jest ważne na pierwszym uruchomieniu
+### Jak rozumiec przyciski operatorskie
 
-W aktualnym buildzie `safe integration` poprawny wynik to zwykle:
+- `ENABLE` - logiczne wlaczenie napedu,
+- `DISABLE` - logiczne wylaczenie napedu,
+- `ACK_FAULT` - potwierdzenie bledu po usunieciu przyczyny,
+- `STOP` - zatrzymanie normalne,
+- `QSTOP` - zatrzymanie szybkie i bardziej restrykcyjne,
+- `HOME` - jawny start sekwencji homingu w buildzie ruchowym,
+- `MOVE_REL` - ruch wzgledny,
+- `MOVE_ABS` - ruch bezwzgledny,
+- `CALIB_ZERO` - komenda serwisowa kalibracji zera.
 
-- brak samoczynnego ruchu,
-- działająca komunikacja,
-- logicznie spójny status,
-- `RUN_ALLOWED = 0`.
+### Co zobaczysz w `SAFE`
 
-## 5. Commissioning etapowy - jak używać panelu etapów
+W wariancie `SAFE` poprawny wynik to:
 
-Przebieg etapów w GUI nie służy do „kliknięcia ruchu”, tylko do wymuszenia bezpiecznej kolejności uruchomienia.
+- komunikacja dziala,
+- telemetria dziala,
+- `HOME` i `MOVE_*` nie powoduja realnego ruchu,
+- os nie rusza sama.
+
+### Co zobaczysz w `MOTION-ENABLED`
+
+W wariancie `MOTION-ENABLED`:
+
+- `HOME` jest aktywny,
+- po `HOME` i spelnieniu bramek safety moze pojawic sie zgoda na ruch,
+- `MOVE_REL` i `MOVE_ABS` moga wykonac realny ruch.
+
+## 5. Commissioning etapowy
+
+Panel etapow nie sluzy do ozdoby. Ma wymusic kolejnosc uruchomienia.
 
 ### Etap 1
 
-Znaczenie:
+Cel:
 
 - komunikacja,
-- diagnostyka,
+- status,
 - brak ruchu.
 
-Co powinno być fizycznie podłączone:
+Operator:
 
-- USB-UART,
-- logiczne zasilanie sterownika,
-- ST-LINK do flashowania według potrzeby,
-- tor mocy najlepiej wyłączony lub ograniczony.
-
-Co robi operator:
-
-- sprawdza połączenie,
-- sprawdza brak faultów lub ich czytelny opis,
-- sprawdza, czy oś nie rusza,
-- sprawdza `VBUS`, `UART`, `Logi`, `SQL`.
+- sprawdza `Polaczenie`, `FAULT`, `VBUS`,
+- sprawdza `UART`, `Logi`, `SQL`,
+- potwierdza brak samoczynnego ruchu.
 
 ### Etap 2
 
-Znaczenie:
+Cel:
 
-- uzbrajanie,
-- test logiki,
-- brak pełnego ruchu.
+- logika operatorska,
+- reakcje safety,
+- nadal bez realnego ruchu w `SAFE`.
 
-Co powinno być fizycznie podłączone:
+Operator:
 
-- USB-UART,
-- logika aktywna,
-- mechanika przygotowana do testów,
-- operator gotowy do `STOP` i `QSTOP`.
-
-Co robi operator:
-
-- testuje `ENABLE`,
-- testuje `DISABLE`,
-- testuje `STOP`,
-- testuje `QSTOP`,
-- obserwuje `Logi` i `UART`.
+- testuje `ENABLE`, `DISABLE`, `STOP`, `QSTOP`,
+- obserwuje logi i statusy,
+- nie przechodzi dalej, jesli firmware zachowuje sie niespojnie.
 
 ### Etap 3
 
-Znaczenie docelowe:
+Cel:
 
-- przygotowanie do ruchu kontrolowanego.
+- przejscie do kontrolowanego ruchu.
 
-Bardzo ważne:
+Wazne:
 
-W aktualnym pakiecie `safe integration` etap 3:
+- w `SAFE` to nadal tylko walidacja workflow,
+- w `MOTION-ENABLED` to etap pod `HOME` i pierwszy maly ruch.
 
-- nie oznacza jeszcze gotowości do realnego ruchu,
-- służy tylko do walidacji przepływu GUI i logiki commissioning,
-- nie powinien być traktowany jako produkcyjny test osi.
-
-### Jak korzystać z checklist
-
-Checkboxy przy etapach są potwierdzeniem operatora:
-
-- nie wykonują pomiaru same z siebie,
-- nie zastępują oględzin urządzenia,
-- nie zastępują kontroli mechaniki,
-- nie są automatycznym systemem bezpieczeństwa.
-
-Najpierw wykonujesz kontrolę fizyczną, dopiero potem zaznaczasz checklistę.
-
-## 6. Przyciski operatorskie
-
-W `Podglądzie online` znajdziesz zwykle:
-
-- `ENABLE`,
-- `DISABLE`,
-- `ACK FAULT`,
-- `STOP`,
-- `QSTOP`,
-- ruch względny,
-- ruch bezwzględny,
-- `CALIB_ZERO`.
-
-### Jak je rozumieć
-
-- `STOP` to normalne zatrzymanie,
-- `QSTOP` to szybsze zatrzymanie i przejście w bezpieczniejszy stan,
-- `ACK FAULT` wolno użyć dopiero po usunięciu przyczyny błędu,
-- komendy ruchu są nadal filtrowane przez firmware.
-
-W obecnym buildzie przyciski ruchu nie powinny uruchomić realnego ruchu osi.
-
-## 7. Ustawienia globalne
+## 6. Ustawienia globalne
 
 ![Ustawienia globalne](images/global.png)
 
-Zakładka `Ustawienia globalne` służy do ustawienia podstawowych limitów pracy osi.
-
-Najważniejsze pola:
+Zakladka sluzy do ustawiania limitow pracy osi:
 
 - `MAX_CURRENT [A]`,
 - `MAX_CURRENT_PEAK [A]`,
@@ -214,66 +172,60 @@ Najważniejsze pola:
 - `SOFT_MIN_POS [um]`,
 - `SOFT_MAX_POS [um]`.
 
-### Jak używać
+Jak uzywac:
 
-1. Ustaw konserwatywne limity.
-2. Wyślij parametry.
-3. Wróć do `Podgląd online`.
-4. Sprawdź, czy statusy są spójne.
+1. Ustaw zachowawcze limity.
+2. Wyslij parametry.
+3. Wroc do `Podglad online`.
+4. Sprawdz statusy.
 
-Na pierwsze uruchomienie wartości powinny być zachowawcze.
+Na pierwsze uruchomienie wartosci powinny byc ostrozne.
 
-## 8. Bezpieczeństwo
+## 7. Bezpieczenstwo
 
-![Bezpieczeństwo](images/safety.png)
+![Bezpieczenstwo](images/safety.png)
 
-Zakładka `Bezpieczeństwo` oddziela konfigurację safety od zwykłych limitów pracy.
+Ta zakladka oddziela zwykle parametry od safety.
 
-Ustawiasz tu:
+Znajdziesz tu:
 
-- obecność hamulca,
-- obecność czujnika kolizji,
-- obecność zewnętrznej blokady,
-- ignorowanie sygnałów safety,
-- zgodę na ruch bez kalibracji,
-- status kalibracji.
+- obecny hardware safety,
+- czujniki i blokady,
+- override safety,
+- zgode na ruch bez kalibracji,
+- stan kalibracji.
 
-### Jak używać
+Zasada praktyczna:
 
-- pola `zainstalowany` opisują rzeczywisty hardware,
-- pola `ignoruj` i `pozwól` są obejściami,
-- obejścia powinny być używane tylko świadomie i tymczasowo.
+- pola `zainstalowany` opisuja rzeczywisty hardware,
+- pola `ignoruj` i `pozwol` sa obejsciami,
+- obejsc nie nalezy uzywac bez wyraznej potrzeby testowej.
 
-Jeżeli nie masz wyraźnej potrzeby testowej:
-
-- nie używaj override,
-- zostaw obejścia wyłączone.
-
-## 9. UART
+## 8. UART
 
 ![UART](images/uart.png)
 
-Zakładka `UART` pokazuje stan kanału komunikacyjnego między Agentem a STM32.
+Zakladka `UART` sluzy do diagnozy polaczenia Agent - STM32.
 
 Widzisz tu:
 
 - port COM,
 - baudrate,
-- status połączenia,
+- status polaczenia,
 - dane diagnostyczne z Agenta.
 
-### Kiedy tu zaglądać
+Tu zagladaj, gdy:
 
-- gdy GUI nie ma danych LIVE,
-- gdy Agent nie odpowiada,
-- gdy są timeouty,
-- gdy chcesz potwierdzić poprawny port COM.
+- GUI nie ma danych LIVE,
+- Agent nie odpowiada,
+- sa timeouty,
+- nie masz pewnosci, czy wybrales dobry port COM.
 
-## 10. Logi
+## 9. Logi
 
 ![Logi](images/logs.png)
 
-Zakładka `Logi` pokazuje zdarzenia zgłaszane przez firmware.
+Zakladka `Logi` pokazuje zdarzenia z firmware.
 
 Typowe wpisy:
 
@@ -281,42 +233,37 @@ Typowe wpisy:
 - `ENABLE`,
 - `DISABLE`,
 - `STOP`,
+- `QSTOP`,
 - `FAULT_SET`,
 - `ACK_FAULT`,
 - `CALIB_OK`.
 
-### Jak używać logów
+Logi sa przydatne, gdy chcesz zobaczyc kolejnosc zdarzen i porownac ja z tym, co zrobil operator.
 
-- patrz na kolejność zdarzeń,
-- porównuj je z tym, co operator zrobił,
-- używaj ich do diagnozy sekwencji uruchomienia.
-
-## 11. SQL
+## 10. SQL
 
 ![SQL](images/sql.png)
 
-Zakładka `SQL` pokazuje lokalne logowanie po stronie Agenta.
+Zakladka `SQL` pokazuje logowanie po stronie Agenta.
 
 Znajdziesz tu:
 
-- informację, czy SQLite działa,
-- ścieżkę pliku bazy,
-- liczbę zapisanych rekordów.
+- status SQLite,
+- sciezke pliku bazy,
+- liczbe rekordow.
 
-### Po co to jest
-
-SQL służy do:
+To sluzy do:
 
 - traceability,
 - diagnozy po testach,
-- porównywania komend i odpowiedzi,
-- odkładania telemetrii poza MCU.
+- porownywania komend i odpowiedzi,
+- odkladania telemetrii poza MCU.
 
-## 12. API
+## 11. API
 
 ![API](images/api.png)
 
-Zakładka `API` jest przeznaczona głównie dla integratora i programisty.
+Zakladka `API` jest dla integratora i programisty.
 
 Pokazuje:
 
@@ -324,70 +271,53 @@ Pokazuje:
 - ich znaczenie,
 - panel komendy `RAW`.
 
-### Panel RAW
+Panel `RAW` jest narzedziem serwisowym. Uzywaj go do:
 
-To narzędzie serwisowe.
+- recznej diagnostyki,
+- pojedynczych komend protokolu,
+- testow integracyjnych.
 
-Używaj go do:
+Nie traktuj go jako zwyklej sciezki operatorskiej.
 
-- ręcznej diagnostyki,
-- pojedynczych komend protokołu,
-- testów serwisowych.
+## 12. Typowy sposob pracy
 
-Nie używaj go jako zwykłej ścieżki operatorskiej.
+### Pierwsze uruchomienie z `SAFE`
 
-## 13. Typowy sposób pracy operatorem
+1. Otworz `Podglad online`.
+2. Sprawdz `Polaczenie`, `Blad`, `RUN_ALLOWED`, `Etap`.
+3. Sprawdz `VBUS`.
+4. Potwierdz brak ruchu.
+5. Przejdz przez Etap 1 i 2.
 
-### Szybki start
+### Przejscie do `MOTION-ENABLED`
 
-1. Otwórz `Podgląd online`.
-2. Sprawdź `Połączenie`, `FAULT`, `RUN_ALLOWED`, `Etap`.
-3. Sprawdź `VBUS`.
-4. Potwierdź brak samoczynnego ruchu.
-
-### Ustawienie parametrów
-
-1. Przejdź do `Ustawienia globalne`.
-2. Ustaw limity.
-3. Wyślij parametry.
-4. Wróć do `Podgląd online`.
-
-### Sprawdzenie safety
-
-1. Przejdź do `Bezpieczeństwo`.
-2. Potwierdź stany czujników i blokad.
-3. Nie włączaj override bez realnej potrzeby.
+1. Wgraj build ruchowy.
+2. Wroc do `Podglad online`.
+3. Potwierdz `MOTION_IMPLEMENTED = 1`.
+4. Przejdz do Etapu 3.
+5. Wyslij `HOME`.
+6. Poczekaj na sukces homingu.
+7. Wyslij maly `MOVE_REL`.
 
 ### Diagnoza problemu
 
-1. `UART` - sprawdź połączenie.
-2. `Logi` - sprawdź kolejność zdarzeń.
-3. `SQL` - sprawdź, czy logowanie działa.
-4. `API` - użyj diagnostyki lub komendy RAW.
+1. `UART` - sprawdz polaczenie i COM.
+2. `Logi` - sprawdz kolejnosc zdarzen.
+3. `SQL` - sprawdz, czy zapis dziala.
+4. `API` - uzyj komendy serwisowej tylko wtedy, gdy wiesz, co robisz.
 
-## 14. Motyw i pomoc
+## 13. Ograniczenia aktualnej wersji
 
-### Motyw
+Wazne rozroznienie:
 
-Przycisk `Motyw: ciemny/jasny` zmienia wygląd interfejsu.
+- `SAFE` sluzy do bezpiecznej integracji i walidacji komunikacji,
+- `MOTION-ENABLED` sluzy do pierwszego kontrolowanego ruchu po wykonaniu checklisty.
 
-### Help
+Nie wolno traktowac `SAFE` jako pelnego builda ruchowego.
 
-Przycisk `Help ON/OFF` pozwala przełączać warstwę opisową:
-
-- `ON` - dla uruchomienia, szkolenia i diagnostyki,
-- `OFF` - dla prostszej pracy operatorskiej.
-
-## 15. Ograniczenia aktualnej wersji
-
-Aktualna wersja GUI i firmware:
-
-- służy do bezpiecznej integracji,
-- nie jest jeszcze końcowym systemem ruchowym,
-- nie powinna być traktowana jako gotowa do normalnej produkcyjnej pracy osi.
-
-## 16. Dokumenty powiązane
+## 14. Dokumenty powiazane
 
 - `docs/Wariant_B_Instalacja_i_Pierwsze_Uruchomienie.md`
 - `docs/STM32_Bringup_Checklist.md`
+- `docs/Pakiety_Wdrozeniowe_Wariant_B.md`
 - `docs/HMI_Protocol.md`

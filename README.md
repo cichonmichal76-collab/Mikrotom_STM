@@ -10,9 +10,12 @@ Repository layout:
 - `docs/` - PRD and system requirements documents
 - `gui/` - static operator GUI for dashboard, safety, commissioning, and motion control
 - `scripts/` - Windows batch helpers for PC setup, GUI/agent startup, MCU build, and ST-LINK flashing
-- `dist/mcu/` - generated safe-integration MCU HEX/BIN files
+- `dist/mcu/` - generated MCU HEX/BIN files for SAFE and MOTION variants
 
-The imported package currently reflects a safe-integration baseline with protocol, telemetry, state management, commissioning, and safety support modules prepared for further integration with the original motion-control implementation.
+The repository now contains two firmware deployment variants:
+
+- `SAFE` - full communication, telemetry, commissioning and safety validation without real motion execution
+- `MOTION-ENABLED` - the same operator path plus real motion, explicit `HOME`, and controlled move support
 
 Recent updates also align the local REST agent and GUI with the newer program
 model, including:
@@ -46,6 +49,7 @@ Quick PC setup:
 MCU firmware:
 
 - generated HEX/BIN files are in `dist/mcu/`
-- regenerate them with `scripts\build_mcu_release.bat`
-- flash with `scripts\flash_mcu_stlink.bat`
+- regenerate them with `scripts\build_mcu_variants.bat both`
+- flash SAFE first with `scripts\flash_mcu_safe_stlink.bat`
+- flash MOTION later with `scripts\flash_mcu_motion_stlink.bat`
 - create ready-to-share Variant B deployment packages with `scripts\prepare_variant_b_packages.bat`

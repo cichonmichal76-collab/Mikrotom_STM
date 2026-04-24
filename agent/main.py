@@ -130,6 +130,11 @@ def api_cmd_ack_fault():
     return _handle_firmware_call(lambda: _transport().send_ok_command("CMD ACK_FAULT"))
 
 
+@app.post("/api/cmd/home")
+def api_cmd_home():
+    return _handle_firmware_call(lambda: _transport().send_ok_command("CMD HOME"))
+
+
 @app.post("/api/cmd/move-rel")
 def api_cmd_move_rel(request: MoveRelRequest):
     return _handle_firmware_call(

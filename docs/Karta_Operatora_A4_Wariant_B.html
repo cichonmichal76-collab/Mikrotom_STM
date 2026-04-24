@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Karta operatora A4 - Mikrotom Wariant B</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+
+    :root {
+      --bg: #f6f8fc;
+      --panel: #ffffff;
+      --line: #d7dfec;
+      --text: #182131;
+      --muted: #53627b;
+      --accent: #1f5fff;
+      --warn: #885800;
+      --ok: #0c6a3b;
+      --bad: #b22020;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.35;
+    }
+
+    .page {
+      width: 190mm;
+      min-height: 277mm;
+      margin: 0 auto;
+      padding: 8mm;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .hero,
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px 12px;
+    }
+
+    .hero {
+      grid-column: 1 / -1;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+    }
+
+    h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    h3 {
+      margin: 8px 0 4px;
+      font-size: 13px;
+    }
+
+    p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    ul,
+    ol {
+      margin: 6px 0 0;
+      padding-left: 18px;
+      font-size: 12px;
+    }
+
+    li {
+      margin: 3px 0;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .badge {
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #e9f0ff;
+      color: var(--accent);
+    }
+
+    .callout {
+      margin-top: 8px;
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .callout.warn {
+      background: #fff5df;
+      color: var(--warn);
+      border: 1px solid #efd49b;
+    }
+
+    .callout.ok {
+      background: #eef9f3;
+      color: var(--ok);
+      border: 1px solid #addcbc;
+    }
+
+    .callout.bad {
+      background: #fff0f0;
+      color: var(--bad);
+      border: 1px solid #f0b4b4;
+    }
+
+    .mono {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+      background: #0f1726;
+      color: #edf2ff;
+      border-radius: 10px;
+      padding: 7px 9px;
+      margin-top: 8px;
+      white-space: pre-wrap;
+    }
+
+    .grid-two {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <h1>Karta operatora A4 - Mikrotom Wariant B</h1>
+      <p>Skrocona karta pracy dla operatora i integratora. Najpierw `SAFE`, potem dopiero `MOTION-ENABLED`.</p>
+      <div class="badge-row">
+        <span class="badge">1. Wgraj SAFE</span>
+        <span class="badge">2. Zalicz Etap 1 i 2</span>
+        <span class="badge">3. Wgraj MOTION</span>
+        <span class="badge">4. HOME</span>
+        <span class="badge">5. Maly MOVE_REL</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>1. Co podlaczyc</h2>
+      <ul>
+        <li>PC z Windows</li>
+        <li>USB-UART do portu komunikacyjnego sterownika</li>
+        <li>ST-LINK do flashowania SWD</li>
+        <li>zasilanie logiki MCU</li>
+        <li>STOP albo mozliwosc natychmiastowego odciecia zasilania</li>
+      </ul>
+      <div class="callout warn">Tor mocy na poczatek trzymaj odlaczony albo mocno ograniczony pradowo.</div>
+    </section>
+
+    <section class="panel">
+      <h2>2. Co oznaczaja warianty</h2>
+      <h3>SAFE</h3>
+      <ul>
+        <li>pelny feedback z urzadzenia</li>
+        <li>telemetria, UART, SQL, API, logi</li>
+        <li>brak realnego ruchu</li>
+      </ul>
+      <h3>MOTION-ENABLED</h3>
+      <ul>
+        <li>to samo co SAFE</li>
+        <li>jawny HOME</li>
+        <li>realny MOVE_REL / MOVE_ABS</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>3. Kolejnosc uruchomienia</h2>
+      <ol>
+        <li>Rozpakuj pakiet PC i Dokumentacja.</li>
+        <li>Wgraj `SAFE` do MCU.</li>
+        <li>Uruchom `install_pc.bat`.</li>
+        <li>Ustaw GUI `LIVE`.</li>
+        <li>Uruchom Agenta z poprawnym `COMx`.</li>
+        <li>Uruchom GUI.</li>
+        <li>Zalicz Etap 1 i Etap 2.</li>
+        <li>Wgraj `MOTION-ENABLED`.</li>
+        <li>Wykonaj `HOME`.</li>
+        <li>Wykonaj bardzo maly `MOVE_REL`.</li>
+      </ol>
+    </section>
+
+    <section class="panel">
+      <h2>4. Etap 1 - komunikacja</h2>
+      <ul>
+        <li>Sprawdz `Polaczenie`.</li>
+        <li>Sprawdz `FAULT`.</li>
+        <li>Sprawdz `VBUS`.</li>
+        <li>Sprawdz `SAFE_INTEGRATION = 1`.</li>
+        <li>Sprawdz `MOTION_IMPLEMENTED = 0`.</li>
+        <li>Potwierdz brak samoczynnego ruchu.</li>
+      </ul>
+      <div class="callout ok">W SAFE komendy dochodza do MCU, ale os nie powinna wykonać realnego ruchu.</div>
+    </section>
+
+    <section class="panel">
+      <h2>5. Etap 2 - logika safety</h2>
+      <ul>
+        <li>Przetestuj `ENABLE`.</li>
+        <li>Przetestuj `DISABLE`.</li>
+        <li>Przetestuj `STOP`.</li>
+        <li>Przetestuj `QSTOP`.</li>
+        <li>Sprawdz `Logi` i `UART`.</li>
+        <li>Nie przechodz dalej, jesli reakcje sa niespojne.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>6. Etap 3 - pierwszy ruch</h2>
+      <ul>
+        <li>Wgraj `MOTION-ENABLED`.</li>
+        <li>Sprawdz `SAFE_INTEGRATION = 0`.</li>
+        <li>Sprawdz `MOTION_IMPLEMENTED = 1`.</li>
+        <li>Przejdz do Etapu `3` w GUI.</li>
+        <li>Wyslij `HOME`.</li>
+        <li>Czekaj na `HOMING_SUCCESSFUL = 1`.</li>
+        <li>Wyslij maly `MOVE_REL`, np. `100 um`.</li>
+      </ul>
+      <div class="callout warn">Nie wykonuj `MOVE_REL` ani `MOVE_ABS`, dopoki HOME nie zakonczy sie sukcesem.</div>
+    </section>
+
+    <section class="panel">
+      <h2>7. Co ma byc gotowe przed ruchem</h2>
+      <ul>
+        <li>mechanika z dala od skrajow</li>
+        <li>konserwatywne limity pradu i predkosci</li>
+        <li>brak aktywnego faultu</li>
+        <li>STOP i odciecie zasilania w zasiegu</li>
+        <li>operator obserwuje kierunek pierwszego ruchu</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>8. Natychmiast przerwij test, jesli</h2>
+      <ul>
+        <li>os rusza sama po boot</li>
+        <li>kierunek ruchu jest nieprawidlowy</li>
+        <li>STOP lub QSTOP nie dziala</li>
+        <li>`VBUS` jest nielogiczny</li>
+        <li>GUI i firmware pokazuja sprzeczne informacje</li>
+      </ul>
+      <div class="callout.bad">W razie watpliwosci wroc do SAFE i nie wykonuj ruchu.</div>
+    </section>
+
+    <section class="panel">
+      <h2>9. Najwazniejsze skrypty</h2>
+      <div class="mono">scripts\flash_mcu_safe_stlink.bat
+scripts\install_pc.bat
+scripts\configure_gui_live.bat
+scripts\run_agent_prompt.bat
+scripts\run_gui.bat
+scripts\flash_mcu_motion_stlink.bat</div>
+    </section>
+
+    <section class="panel">
+      <h2>10. Gdzie patrzec w GUI</h2>
+      <ul>
+        <li>`Podglad online` - status, RUN_ALLOWED, VBUS</li>
+        <li>`Bezpieczenstwo` - blokady i override</li>
+        <li>`UART` - lacze Agent - STM32</li>
+        <li>`Logi` - kolejnosc zdarzen</li>
+        <li>`SQL` - zapis testow</li>
+        <li>`API` - diagnostyka i RAW</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

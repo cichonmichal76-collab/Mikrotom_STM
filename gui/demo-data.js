@@ -10,6 +10,9 @@ window.DEMO_STATE = {
     controlled_motion: 0,
     run_allowed: 0,
     enabled: 0,
+    homing_started: 0,
+    homing_successful: 0,
+    homing_ongoing: 0,
     config_loaded: 0,
     safe_integration: 0,
     motion_implemented: 1,
@@ -77,6 +80,7 @@ window.demoRecompute = function() {
     status.controlled_motion === 1 &&
     status.safe_mode === 0 &&
     status.enabled === 1 &&
+    status.homing_successful === 1 &&
     calibrationRequired === false &&
     status.motion_implemented === 1
   ) ? 1 : 0;
@@ -87,6 +91,11 @@ window.demoRecompute = function() {
   }
 
   if (status.config_loaded !== 1 || calibrationRequired) {
+    status.axis_state = "CONFIG";
+    return;
+  }
+
+  if (status.motion_implemented === 1 && status.homing_successful !== 1) {
     status.axis_state = "CONFIG";
     return;
   }
@@ -169,6 +178,17 @@ window.demoHandleCommand = function(type, payload) {
       window.demoPushEvent("FAULT_ACK", 0);
       window.demoRecompute();
       return { ok: true };
+    case "home":
+      if (status.motion_implemented !== 1) return { ok: false, error: "COMMAND_REJECTED" };
+      status.homing_started = 1;
+      status.homing_ongoing = 0;
+      status.homing_successful = 1;
+      status.calib_valid = 1;
+      status.config_loaded = 1;
+      window.demoPushEvent("CALIB_START", 0);
+      window.demoPushEvent("CALIB_OK", Math.round(status.position_um));
+      window.demoRecompute();
+      return { ok: true };
     case "stop":
       status.position_set_um = status.position_um;
       window.DEMO_STATE.stop_pending = 1;
@@ -207,6 +227,9 @@ window.demoHandleCommand = function(type, payload) {
         window.demoPushEvent("CALIB_OK", Math.round(status.position_um));
         window.demoRecompute();
         return { ok: true };
+      }
+      if (raw === "CMD HOME") {
+        return window.demoHandleCommand("home", {});
       }
       if (raw === "CMD ACK_FAULT") {
         return window.demoHandleCommand("ackFault", {});

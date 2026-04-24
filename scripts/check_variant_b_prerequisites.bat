@@ -35,10 +35,16 @@ if exist "%STM32_PROGRAMMER_CLI%" (
     echo [MISSING] STM32CubeProgrammer CLI was not found.
 )
 
-if exist "%ROOT%\dist\mcu\Mikrotom_STM_latest.hex" (
-    echo [OK] MCU firmware file found.
+if exist "%ROOT%\dist\mcu\Mikrotom_STM_latest_safe.hex" (
+    echo [OK] MCU SAFE firmware file found.
 ) else (
-    echo [MISSING] dist\mcu\Mikrotom_STM_latest.hex
+    echo [INFO] MCU SAFE firmware file is not included in this package.
+)
+
+if exist "%ROOT%\dist\mcu\Mikrotom_STM_latest_motion.hex" (
+    echo [OK] MCU MOTION firmware file found.
+) else (
+    echo [INFO] MCU MOTION firmware file is not included in this package.
 )
 
 if exist "%ROOT%\docs\Wariant_B_Instalacja_i_Pierwsze_Uruchomienie.md" (
@@ -51,7 +57,8 @@ echo.
 echo Notes:
 echo - USB-UART COM port is checked in Windows Device Manager.
 echo - ST-LINK is required only for flashing MCU by SWD.
-echo - Current firmware package is SAFE INTEGRATION and should not move the axis.
+echo - SAFE package is for first validation of communication, telemetry and safety.
+echo - MOTION package is only for the next step, after SAFE validation is complete.
 echo.
 
 if "%HAS_PYTHON%"=="0" (

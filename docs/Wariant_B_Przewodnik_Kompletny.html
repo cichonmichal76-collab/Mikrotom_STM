@@ -19,10 +19,7 @@
       --shadow: 0 18px 45px rgba(31, 47, 79, 0.09);
     }
 
-    * {
-      box-sizing: border-box;
-    }
-
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: "Segoe UI", Arial, sans-serif;
@@ -60,48 +57,6 @@
       font-size: 1.03rem;
     }
 
-    .toc {
-      padding: 22px 26px;
-      margin-bottom: 22px;
-    }
-
-    .toc h2,
-    .section h2 {
-      margin: 0 0 12px;
-      font-size: clamp(1.4rem, 2vw, 2rem);
-    }
-
-    .toc ul,
-    .section ul,
-    .section ol {
-      margin: 0;
-      padding-left: 22px;
-    }
-
-    .toc li,
-    .section li {
-      margin: 6px 0;
-    }
-
-    .toc a {
-      color: var(--accent);
-      text-decoration: none;
-    }
-
-    .section {
-      padding: 24px 26px;
-      margin-bottom: 18px;
-    }
-
-    .section h3 {
-      margin: 20px 0 10px;
-      font-size: 1.18rem;
-    }
-
-    .section p {
-      margin: 10px 0;
-    }
-
     .badge-row {
       display: flex;
       flex-wrap: wrap;
@@ -118,6 +73,35 @@
       color: var(--accent);
       font-weight: 700;
       font-size: 0.92rem;
+    }
+
+    .section {
+      padding: 24px 26px;
+      margin-bottom: 18px;
+    }
+
+    .section h2 {
+      margin: 0 0 12px;
+      font-size: clamp(1.4rem, 2vw, 2rem);
+    }
+
+    .section h3 {
+      margin: 18px 0 10px;
+      font-size: 1.18rem;
+    }
+
+    .section p {
+      margin: 10px 0;
+    }
+
+    .section ul,
+    .section ol {
+      margin: 0;
+      padding-left: 22px;
+    }
+
+    .section li {
+      margin: 6px 0;
     }
 
     .callout {
@@ -179,245 +163,135 @@
       background: #0f1726;
       color: #e8eefc;
     }
-
-    .footer {
-      color: var(--muted);
-      text-align: center;
-      padding: 18px 0 0;
-      font-size: 0.95rem;
-    }
   </style>
 </head>
 <body>
   <div class="page">
     <section class="hero">
       <h1>Mikrotom - Wariant B - przewodnik kompletny</h1>
-      <p>Przewodnik dla drugiego komputera: po co powstał nowy system, jak ma się do starego softu, co wdrażamy teraz, jak wykonać commissioning etapowy i jak uruchomić cały pakiet od zera.</p>
+      <p>Przewodnik dla drugiego komputera: po co powstal nowy system, co zostawiamy ze starego softu, jak wyglada przejscie SAFE -> MOTION oraz jak uruchomic GUI, Agenta i MCU krok po kroku.</p>
       <div class="badge-row">
-        <span class="badge">SAFE INTEGRATION</span>
+        <span class="badge">SAFE najpierw</span>
         <span class="badge">GUI + Agent + UART + SQL</span>
-        <span class="badge">Ruch jeszcze zablokowany</span>
+        <span class="badge">MOTION dopiero po walidacji</span>
       </div>
     </section>
 
-    <section class="toc panel">
-      <h2>Spis treści</h2>
-      <ul>
-        <li><a href="#cel">1. Po co powstało to oprogramowanie</a></li>
-        <li><a href="#stary-nowy">2. Stary soft a nowy system</a></li>
-        <li><a href="#wdrozenie-teraz">3. Co wdrażamy teraz, a co później</a></li>
-        <li><a href="#architektura">4. Architektura systemu</a></li>
-        <li><a href="#commissioning">5. Commissioning etapowy</a></li>
-        <li><a href="#instalacja">6. Instalacja i pierwsze uruchomienie</a></li>
-        <li><a href="#gui">7. Jak używać GUI</a></li>
-        <li><a href="#pakiet">8. Jak korzystać z paczki wdrożeniowej</a></li>
-      </ul>
-    </section>
-
-    <section id="cel" class="section panel">
-      <h2>1. Po co powstało to oprogramowanie</h2>
-      <p>Pierwotny software sterownika realizował głównie warstwę napędową: pomiary, FOC, PID, trajektorię i sterowanie sprzętowe. To wystarczało, aby urządzenie działało, ale nie dawało jeszcze pełnego systemu operatorskiego i uruchomieniowego.</p>
-      <p>Nowy system powstał po to, aby zachować działający fundament sprzętowy i dołożyć nad nim warstwę bezpieczeństwa, diagnostyki, API, GUI i przygotowania do HMI.</p>
+    <section class="section panel">
+      <h2>1. Po co powstalo to oprogramowanie</h2>
+      <p>Pierwotny software byl glownie sterowaniem napedem. Nowy system zachowuje ten fundament sprzetowy, ale doklada nad nim safety, commissioning, API, GUI, logi i warstwe operatorska.</p>
       <div class="callout ok">
-        <strong>Najważniejsza zasada</strong>
-        Nie przepisujemy działającego toru sprzętowego od zera. Obudowujemy go warstwą systemową, która pilnuje kiedy i na jakich warunkach wolno dopuścić ruch.
+        <strong>Najwazniejsza zasada</strong>
+        Nie przepisujemy od zera sprawdzonego toru sprzetowego. Obudowujemy go warstwa systemowa, ktora pilnuje kiedy i na jakich warunkach wolno wykonac ruch.
       </div>
     </section>
 
-    <section id="stary-nowy" class="section panel">
-      <h2>2. Stary soft a nowy system</h2>
-      <h3>Co zostawiamy</h3>
+    <section class="section panel">
+      <h2>2. Dwa warianty firmware</h2>
+      <h3>SAFE</h3>
       <ul>
-        <li>niskopoziomowy tor sprzętowy,</li>
-        <li>sprawdzone elementy pomiarowe,</li>
-        <li>PWM, ADC, OPAMP, TIM,</li>
-        <li>strukturę projektu STM32,</li>
-        <li>elementy sterowania, które już działają na urządzeniu.</li>
+        <li>pelny feedback z urzadzenia,</li>
+        <li>telemetria, logi, SQL, UART i API,</li>
+        <li>komendy operatorskie dochodza do MCU,</li>
+        <li>brak realnego ruchu.</li>
       </ul>
-      <h3>Co poprawiamy</h3>
+      <h3>MOTION-ENABLED</h3>
       <ul>
-        <li>usuwamy niekontrolowane automaty po starcie,</li>
-        <li>oddzielamy konfigurację od safety,</li>
-        <li>porządkujemy fault handling,</li>
-        <li>wprowadzamy commissioning etapowy,</li>
-        <li>przenosimy komunikację operatora do ścieżki GUI - Agent - UART - STM32.</li>
-      </ul>
-      <h3>Co to znaczy praktycznie</h3>
-      <pre>stary soft = glownie sterowanie napedem
-nowy soft = sterowanie napedem + safety + commissioning + GUI + API + logi</pre>
-    </section>
-
-    <section id="wdrozenie-teraz" class="section panel">
-      <h2>3. Co wdrażamy teraz, a co później</h2>
-      <h3>Wdrażamy teraz</h3>
-      <ul>
-        <li>Agent lokalny,</li>
-        <li>GUI operatorskie,</li>
-        <li>API HTTP,</li>
-        <li>UART do MCU,</li>
-        <li>SQL / SQLite po stronie Agenta,</li>
-        <li>event log,</li>
-        <li>commissioning etapowy,</li>
-        <li>safe integration start bez ruchu.</li>
-      </ul>
-      <h3>Dojdzie później</h3>
-      <ul>
-        <li>build motion-enabled,</li>
-        <li>pełniejsze sterowanie ruchem z nowej architektury,</li>
-        <li>szersza telemetria,</li>
-        <li>pełniejsze HMI,</li>
-        <li>bardziej dojrzały zapis konfiguracji.</li>
+        <li>ten sam tor komunikacji i diagnostyki,</li>
+        <li>jawny <code>HOME</code>,</li>
+        <li>realne <code>MOVE_REL</code> i <code>MOVE_ABS</code>,</li>
+        <li>mozliwosc pierwszego kontrolowanego ruchu po spelnieniu warunkow safety.</li>
       </ul>
       <div class="callout warn">
-        <strong>Ważne</strong>
-        Aktualny pakiet jest buildem SAFE INTEGRATION. Jego zadaniem jest potwierdzenie komunikacji, diagnostyki, safety i workflow commissioning. Brak ruchu po uruchomieniu jest poprawnym wynikiem.
+        <strong>Kolejnosc</strong>
+        Najpierw wgrywasz i walidujesz SAFE. Dopiero po przejsciu Etapu 1 i 2 wgrywasz MOTION-ENABLED.
       </div>
     </section>
 
-    <section id="architektura" class="section panel">
-      <h2>4. Architektura systemu</h2>
-      <pre>GUI / HMI
-    ->
-Agent PC / API / SQL
-    ->
-UART
-    ->
-STM32 firmware
-    ->
-warstwa sterowania osi
-    ->
-hardware</pre>
-      <p>GUI nie steruje hardware bezpośrednio. HMI także nie powinno omijać Agenta. Ostateczna decyzja o ruchu należy do firmware STM32.</p>
+    <section class="section panel">
+      <h2>3. Commissioning etapowy</h2>
+      <h3>Etap 1</h3>
+      <p>Komunikacja i diagnostyka. USB-UART podpiety, logika wlaczona, tor mocy najlepiej odlaczony albo mocno ograniczony. Sprawdzasz status, telemetrie, logi i brak ruchu.</p>
+      <h3>Etap 2</h3>
+      <p>Logika operatorska i safety. Testujesz <code>ENABLE</code>, <code>DISABLE</code>, <code>STOP</code>, <code>QSTOP</code> i reakcje na timeout komunikacji.</p>
+      <h3>Etap 3</h3>
+      <p>Przygotowanie do ruchu kontrolowanego. W buildzie ruchowym wykonujesz <code>HOME</code>, potem bardzo maly <code>MOVE_REL</code>.</p>
     </section>
 
-    <section id="commissioning" class="section panel">
-      <h2>5. Commissioning etapowy</h2>
-      <p>Przebieg etapów jest po to, żeby nie przechodzić od razu do ruchu. Najpierw sprawdzamy komunikację, potem logikę, a dopiero na końcu przygotowujemy warunki pod ruch kontrolowany.</p>
-
-      <h3>Etap 1 - komunikacja i diagnostyka</h3>
-      <ul>
-        <li>podłącz USB-UART,</li>
-        <li>zasil logikę,</li>
-        <li>tor mocy trzymaj wyłączony albo ograniczony,</li>
-        <li>uruchom Agenta i GUI,</li>
-        <li>sprawdź Połączenie, FAULT, RUN_ALLOWED, VBUS, UART, Logi i SQL,</li>
-        <li>potwierdź brak samoczynnego ruchu.</li>
-      </ul>
-
-      <h3>Etap 2 - uzbrajanie i test logiki</h3>
-      <ul>
-        <li>mechanika nadal musi być bezpieczna,</li>
-        <li>operator ma być gotowy do STOP / QSTOP,</li>
-        <li>testuj ENABLE, DISABLE, STOP, QSTOP,</li>
-        <li>obserwuj reakcję GUI, logów i firmware,</li>
-        <li>w aktualnym buildzie nadal nie oczekuj realnego ruchu.</li>
-      </ul>
-
-      <h3>Etap 3 - przygotowanie pod ruch kontrolowany</h3>
-      <ul>
-        <li>w docelowej wersji to etap przed ruchem,</li>
-        <li>w aktualnym pakiecie służy tylko do walidacji workflow i logiki commissioning,</li>
-        <li>nie traktuj go jako zgody na produkcyjny test ruchu.</li>
-      </ul>
-
-      <div class="callout">
-        <strong>Jak używać checklist</strong>
-        Checkboxy nie zastępują fizycznej kontroli urządzenia. Najpierw wykonujesz realną kontrolę, potem dopiero zaznaczasz checklistę i aktywujesz etap.
-      </div>
-    </section>
-
-    <section id="instalacja" class="section panel">
-      <h2>6. Instalacja i pierwsze uruchomienie</h2>
+    <section class="section panel">
+      <h2>4. Instalacja krok po kroku</h2>
       <ol>
-        <li>Uruchom skrypt sprawdzający wymagania.</li>
-        <li>Jeśli trzeba - doinstaluj Python i STM32CubeProgrammer.</li>
-        <li>Wgraj firmware przez ST-LINK.</li>
-        <li>Uruchom instalację części PC.</li>
-        <li>Przełącz GUI na LIVE.</li>
-        <li>Uruchom Agenta z właściwym COM.</li>
+        <li>Rozpakuj <code>Pakiet PC</code>, <code>Pakiet MCU SAFE</code> i <code>Pakiet Dokumentacja</code>.</li>
+        <li>Uruchom skrypt sprawdzajacy wymagania.</li>
+        <li>Wgraj MCU SAFE przez ST-LINK.</li>
+        <li>Zainstaluj czesc PC.</li>
+        <li>Przelacz GUI na LIVE.</li>
+        <li>Uruchom Agenta z poprawnym COM.</li>
         <li>Uruchom GUI.</li>
-        <li>Wykonaj commissioning etap 1.</li>
+        <li>Wykonaj Etap 1 i Etap 2.</li>
+        <li>Wgraj MCU MOTION.</li>
+        <li>Wykonaj HOME i maly ruch testowy.</li>
       </ol>
-      <pre>scripts\check_variant_b_prerequisites.bat
-scripts\flash_mcu_stlink.bat
+      <pre>scripts\flash_mcu_safe_stlink.bat
 scripts\install_pc.bat
 scripts\configure_gui_live.bat
 scripts\run_agent_prompt.bat
-scripts\run_gui.bat</pre>
-      <div class="callout warn">
-        <strong>Oczekiwany wynik po starcie</strong>
-        GUI i Agent mają działać, ale RUN_ALLOWED ma pozostać zablokowane. Oś nie powinna wykonać samoczynnego ruchu.
-      </div>
+scripts\run_gui.bat
+scripts\flash_mcu_motion_stlink.bat</pre>
     </section>
 
-    <section id="gui" class="section panel">
-      <h2>7. Jak używać GUI</h2>
-
-      <h3>Podgląd online</h3>
+    <section class="section panel">
+      <h2>5. GUI - glowny ekran</h2>
       <figure class="image-card">
-        <img src="images/online.png" alt="Podgląd online">
-        <figcaption>Główny ekran: status systemu, KPI, statusy safety i commissioning etapowy.</figcaption>
+        <img src="images/online.png" alt="Podglad online">
+        <figcaption>Glowny widok: status systemu, KPI, safety, commissioning oraz przyciski operatorskie.</figcaption>
       </figure>
+      <p>Na tym ekranie sprawdzasz przede wszystkim: <code>Polaczenie</code>, <code>Blad</code>, <code>RUN_ALLOWED</code>, <code>VBUS</code>, aktywny etap oraz przyciski operatorskie.</p>
+    </section>
 
-      <h3>Ustawienia globalne</h3>
+    <section class="section panel">
+      <h2>6. Ustawienia i safety</h2>
       <figure class="image-card">
         <img src="images/global.png" alt="Ustawienia globalne">
-        <figcaption>Tu ustawiasz podstawowe limity osi: prąd, prędkość, przyspieszenie i zakres pozycji.</figcaption>
+        <figcaption>Limity pradu, predkosci, przyspieszenia i soft limity osi.</figcaption>
       </figure>
-
-      <h3>Bezpieczeństwo</h3>
       <figure class="image-card">
-        <img src="images/safety.png" alt="Bezpieczeństwo">
-        <figcaption>Oddzielna sekcja dla czujników safety i jawnych override.</figcaption>
+        <img src="images/safety.png" alt="Bezpieczenstwo">
+        <figcaption>Hardware safety, override i konfiguracja logicznych zabezpieczen.</figcaption>
       </figure>
+    </section>
 
-      <h3>UART</h3>
+    <section class="section panel">
+      <h2>7. Diagnostyka</h2>
       <figure class="image-card">
         <img src="images/uart.png" alt="UART">
-        <figcaption>Diagnostyka połączenia Agent - STM32 przez UART.</figcaption>
+        <figcaption>Diagnoza polaczenia Agent - STM32 przez UART.</figcaption>
       </figure>
-
-      <h3>Logi</h3>
       <figure class="image-card">
         <img src="images/logs.png" alt="Logi">
-        <figcaption>Historia zdarzeń firmware przydatna do diagnozy kolejności działań.</figcaption>
+        <figcaption>Zdarzenia z firmware przydatne do ustalenia kolejnosci dzialan.</figcaption>
       </figure>
-
-      <h3>SQL</h3>
       <figure class="image-card">
         <img src="images/sql.png" alt="SQL">
-        <figcaption>Lokalne logowanie do SQLite po stronie Agenta.</figcaption>
+        <figcaption>Lokalne logowanie po stronie Agenta.</figcaption>
       </figure>
-
-      <h3>API</h3>
       <figure class="image-card">
         <img src="images/api.png" alt="API">
-        <figcaption>Mapa endpointów HTTP i panel komend RAW.</figcaption>
+        <figcaption>Mapa endpointow HTTP i panel serwisowy RAW.</figcaption>
       </figure>
     </section>
 
-    <section id="pakiet" class="section panel">
-      <h2>8. Jak korzystać z paczki wdrożeniowej</h2>
-      <p>W katalogu paczki znajdziesz numerowane pliki `.bat`, aby laik mógł iść po kolei bez znajomości repozytorium.</p>
+    <section class="section panel">
+      <h2>8. Co trzeba sprawdzic przed pierwszym ruchem</h2>
       <ul>
-        <li><code>00_START_TUTAJ.bat</code> - otwiera przewodnik,</li>
-        <li><code>01_SPRAWDZ_WYMAGANIA*.bat</code> - sprawdza narzędzia,</li>
-        <li><code>02_INSTALUJ_PC.bat</code> - instaluje część PC,</li>
-        <li><code>03_WGRAJ_MCU_STLINK.bat</code> - wgrywa firmware,</li>
-        <li><code>04_USTAW_GUI_LIVE.bat</code> - przełącza GUI na LIVE,</li>
-        <li><code>05_URUCHOM_AGENT.bat</code> - pyta o COM i uruchamia Agenta,</li>
-        <li><code>06_URUCHOM_GUI.bat</code> - uruchamia GUI,</li>
-        <li><code>07_OTWORZ_DOKUMENTACJE.bat</code> - otwiera dokumenty.</li>
+        <li>czy w MCU na pewno jest build <code>MOTION-ENABLED</code>,</li>
+        <li>czy <code>HOME</code> zakonczyl sie sukcesem,</li>
+        <li>czy fault jest pusty,</li>
+        <li>czy soft limity sa konserwatywne,</li>
+        <li>czy operator ma gotowy STOP i odciecie zasilania,</li>
+        <li>czy pierwszy ruch bedzie bardzo maly.</li>
       </ul>
-      <div class="callout ok">
-        <strong>Dla laika</strong>
-        Najpierw uruchom 00_START_TUTAJ.bat, potem wykonuj skrypty po kolei. Nie zaczynaj od GUI, jeśli firmware nie został jeszcze wgrany i Agent nie ma ustawionego poprawnego COM portu.
-      </div>
     </section>
-
-    <div class="footer">
-      Mikrotom Variant B Guide - stan pakietu na 2026-04-24
-    </div>
   </div>
 </body>
 </html>

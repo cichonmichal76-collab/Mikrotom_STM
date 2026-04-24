@@ -29,6 +29,7 @@ const API_ENDPOINTS = [
   ["POST", "/api/cmd/enable", "włączenie osi"],
   ["POST", "/api/cmd/disable", "wyłączenie osi"],
   ["POST", "/api/cmd/ack-fault", "potwierdzenie błędu po usunięciu przyczyny"],
+  ["POST", "/api/cmd/home", "jawne uruchomienie sekwencji HOME"],
   ["POST", "/api/cmd/stop", "STOP"],
   ["POST", "/api/cmd/qstop", "QSTOP"],
   ["POST", "/api/cmd/move-rel", "kontrolowany ruch względny"],
@@ -159,6 +160,7 @@ const BUTTON_HELP_TEXTS = {
   "btn-enable": "Wysyła CMD ENABLE. Samo ENABLE nie wystarcza do ruchu, bo firmware nadal sprawdza RUN_ALLOWED.",
   "btn-disable": "Wysyła CMD DISABLE i blokuje napęd logicznie.",
   "btn-ack-fault": "Wysyła CMD ACK_FAULT. Użyj dopiero po usunięciu przyczyny błędu.",
+  "btn-home": "Wysyła CMD HOME. W buildzie ruchowym uruchamia jawną sekwencję homingu zamiast automatycznego startu po boot.",
   "btn-stop": "Wysyła CMD STOP. To normalne zatrzymanie, które powinno być zawsze dostępne.",
   "btn-qstop": "Wysyła CMD QSTOP. To szybkie zatrzymanie i wyjście do bezpieczniejszego stanu.",
   "btn-move-rel": "Wysyła CMD MOVE_REL z wartością z pola ruchu względnego. Przycisk jest blokowany, gdy RUN_ALLOWED nie pozwala na ruch.",
@@ -190,6 +192,9 @@ const STATUS_HELP_TEXTS = {
   "Tylko uzbrajanie": "Tryb do testu gotowości bez pełnego ruchu.",
   "Ruch kontrolowany": "Flaga dopuszczająca ruch w etapie 3, jeśli pozostałe warunki safety są spełnione.",
   "Ruch bez kalibracji dozwolony": "Ryzykowny override. Przy normalnej pracy powinien być wyłączony.",
+  "Homing rozpoczęty": "TAK oznacza, że firmware otrzymał żądanie HOME i wszedł w sekwencję bazowania.",
+  "Homing w toku": "TAK oznacza, że oś wykonuje sekwencję HOME i nie należy jeszcze zlecać ruchów testowych.",
+  "Homing zakończony": "TAK oznacza, że firmware zakończył sekwencję HOME sukcesem i może odblokować ruch po spełnieniu reszty warunków.",
   "Kalibracja ważna": "TAK oznacza, że firmware uznaje punkt odniesienia osi za poprawny.",
   "VBUS": "Zmierzona wartość napięcia zasilania mocy.",
   "VBUS poprawny": "TAK oznacza, że pomiar VBUS jest dostępny i mieści się w oczekiwanym zakresie.",
@@ -293,6 +298,7 @@ const BUTTON_HELP_REFS = {
   "btn-enable": "POST /api/cmd/enable -> CMD ENABLE",
   "btn-disable": "POST /api/cmd/disable -> CMD DISABLE",
   "btn-ack-fault": "POST /api/cmd/ack-fault -> CMD ACK_FAULT",
+  "btn-home": "POST /api/cmd/home -> CMD HOME",
   "btn-stop": "POST /api/cmd/stop -> CMD STOP",
   "btn-qstop": "POST /api/cmd/qstop -> CMD QSTOP",
   "btn-move-rel": "POST /api/cmd/move-rel -> CMD MOVE_REL",
@@ -324,6 +330,9 @@ const STATUS_HELP_REFS = {
   "Tylko uzbrajanie": "status.arming_only / Commissioning_IsArmingOnly()",
   "Ruch kontrolowany": "status.controlled_motion / Commissioning_IsControlledMotion()",
   "Ruch bez kalibracji dozwolony": "status.allow_motion_without_calibration",
+  "Homing rozpoczęty": "status.homing_started / CMD HOME",
+  "Homing w toku": "status.homing_ongoing / state.HomingOngoing",
+  "Homing zakończony": "status.homing_successful / state.HomingSuccessful",
   "Kalibracja ważna": "status.calib_valid / Calibration_IsValid()",
   "VBUS": "status.vbus_V",
   "VBUS poprawny": "status.vbus_valid",
@@ -341,6 +350,7 @@ const API_HELP_REFS = {
   "/api/cmd/enable": "agent/main.py api_cmd_enable() -> CMD ENABLE",
   "/api/cmd/disable": "agent/main.py api_cmd_disable() -> CMD DISABLE",
   "/api/cmd/ack-fault": "agent/main.py api_cmd_ack_fault() -> CMD ACK_FAULT",
+  "/api/cmd/home": "agent/main.py api_cmd_home() -> CMD HOME",
   "/api/cmd/stop": "agent/main.py api_cmd_stop() -> CMD STOP",
   "/api/cmd/qstop": "agent/main.py api_cmd_qstop() -> CMD QSTOP",
   "/api/cmd/move-rel": "agent/main.py api_cmd_move_rel() -> CMD MOVE_REL",
@@ -666,6 +676,9 @@ async function executeCommand(type, payload = {}) {
       case "ackFault":
         result = await apiPost("/api/cmd/ack-fault", {});
         break;
+      case "home":
+        result = await apiPost("/api/cmd/home", {});
+        break;
       case "stop":
         result = await apiPost("/api/cmd/stop", {});
         break;
@@ -812,6 +825,7 @@ function explainRunAllowed(status) {
   if (Number(status.vbus_valid || 0) !== 1) blockers.push("VBUS nie został jeszcze poprawnie zmierzony");
   if (Number(status.config_loaded || 0) !== 1) blockers.push("konfiguracja nie została załadowana z flash");
   if (Number(status.fault_mask || 0) !== 0) blockers.push("aktywny błąd");
+  if (Number(status.motion_implemented ?? 1) === 1 && Number(status.homing_successful || 0) !== 1) blockers.push("homing nie został jeszcze zakończony");
   if (String(status.axis_state || "") === "CONFIG") blockers.push("oś czeka na konfigurację albo kalibrację");
   if (Number(status.commissioning_stage || 0) !== 3) blockers.push("aktywny etap nie jest etapem 3");
   if (Number(status.safe_mode || 0) !== 0) blockers.push("aktywny tryb bezpieczny");
@@ -837,6 +851,9 @@ function renderStatusDetails(status) {
     ["Tylko uzbrajanie", Number(status.arming_only || 0) ? "WŁ." : "WYŁ."],
     ["Ruch kontrolowany", Number(status.controlled_motion || 0) ? "WŁ." : "WYŁ."],
     ["Ruch bez kalibracji dozwolony", formatBool(status.allow_motion_without_calibration)],
+    ["Homing rozpoczęty", formatBool(status.homing_started)],
+    ["Homing w toku", formatBool(status.homing_ongoing)],
+    ["Homing zakończony", formatBool(status.homing_successful)],
     ["Kalibracja ważna", formatBool(status.calib_valid)],
     ["VBUS", vbusValid ? `${fmt(status.vbus_V, 2)} V` : "brak próbki"],
     ["VBUS poprawny", formatBool(status.vbus_valid)],
@@ -969,6 +986,7 @@ function renderAll() {
   const runAllowed = Number(status.run_allowed || 0);
   const stage = Number(status.commissioning_stage || 1);
   const motionImplemented = Number(status.motion_implemented ?? 1);
+  const homingOngoing = Number(status.homing_ongoing || 0) === 1;
   const vbusValid = Number(status.vbus_valid || 0) === 1;
   const liveMotionReady = runAllowed === 1 && motionImplemented === 1 && vbusValid;
 
@@ -1008,6 +1026,7 @@ function renderAll() {
 
   $("btn-move-rel").disabled = !liveMotionReady;
   $("btn-move-abs").disabled = !liveMotionReady;
+  $("btn-home").disabled = !uiState.connected || motionImplemented !== 1 || homingOngoing;
   $("btn-ack-fault").disabled = Number(status.fault_mask || 0) === 0;
 
   ["stage-1-card", "stage-2-card", "stage-3-card"].forEach((id, index) => {
@@ -1051,6 +1070,7 @@ function bindActions() {
   $("btn-enable").addEventListener("click", () => runAction("enable", {}, "Wysłano ENABLE"));
   $("btn-disable").addEventListener("click", () => runAction("disable", {}, "Wysłano DISABLE"));
   $("btn-ack-fault").addEventListener("click", () => runAction("ackFault", {}, "Wysłano ACK_FAULT"));
+  $("btn-home").addEventListener("click", () => runAction("home", {}, "Wysłano HOME"));
   $("btn-stop").addEventListener("click", () => runAction("stop", {}, "Wysłano STOP"));
   $("btn-qstop").addEventListener("click", () => runAction("qstop", {}, "Wysłano QSTOP"));
 

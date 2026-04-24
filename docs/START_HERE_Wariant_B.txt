@@ -2,31 +2,48 @@ MIKROTOM - WARIANT B - START HERE
 =================================
 
 Ten pakiet sluzy do:
-- wgrania firmware SAFE INTEGRATION do MCU,
-- uruchomienia Agenta i GUI na drugim komputerze,
-- sprawdzenia komunikacji, safety, logow i commissioning,
-- przygotowania systemu pod przyszly firmware z realnym ruchem.
+- wdrozenia GUI, Agenta, API, SQL i UART na komputerze docelowym,
+- wgrania MCU firmware w dwoch krokach: SAFE, a potem MOTION,
+- przejscia przez commissioning etapowy 1 / 2 / 3,
+- wykonania pierwszego kontrolowanego HOME i malego ruchu testowego.
 
-UWAGA:
-- aktualny firmware NIE jest jeszcze finalnym buildem ruchowym,
-- brak ruchu po uruchomieniu jest wynikiem prawidlowym,
-- RUN_ALLOWED powinno pozostac zablokowane.
+Najwazniejsza zasada:
+- najpierw wgrywasz i walidujesz SAFE,
+- dopiero potem wgrywasz MOTION-ENABLED.
+
+Co daje SAFE:
+- pelny feedback z urzadzenia,
+- telemetrie,
+- logi,
+- UART,
+- komendy operatorskie,
+- brak realnego ruchu.
+
+Co daje MOTION-ENABLED:
+- to samo co SAFE,
+- dodatkowo HOME i realny ruch po spelnieniu warunkow safety.
 
 Najprostsza kolejnosc:
 
-1. Uruchom 01_SPRAWDZ_WYMAGANIA*.bat
-2. Jesli trzeba - uruchom 02_INSTALUJ_PC.bat
-3. Wgraj firmware: 03_WGRAJ_MCU_STLINK.bat
-4. Ustaw GUI LIVE: 04_USTAW_GUI_LIVE.bat
-5. Uruchom Agenta: 05_URUCHOM_AGENT.bat
-6. Uruchom GUI: 06_URUCHOM_GUI.bat
-7. Otworz dokumentacje: 07_OTWORZ_DOKUMENTACJE.bat
+1. Uruchom 00_START_TUTAJ.bat lub 01_SPRAWDZ_WYMAGANIA*.bat
+2. Wgraj MCU SAFE
+3. Zainstaluj czesc PC
+4. Ustaw GUI LIVE
+5. Uruchom Agenta
+6. Uruchom GUI
+7. Zakoncz Etap 1 i Etap 2
+8. Wgraj MCU MOTION
+9. Wykonaj HOME
+10. Wykonaj bardzo maly MOVE_REL
 
 Wazne:
 - COM port USB-UART sprawdzasz w Menedzerze urzadzen Windows.
 - Do flashowania MCU potrzebny jest STM32CubeProgrammer i ST-LINK.
-- Do dzialania GUI/Agenta potrzebny jest Python 3.12+.
+- Do dzialania GUI i Agenta potrzebny jest Python 3.12+.
+- Nie zaczynaj od builda MOTION.
 
-Pelny przewodnik otworz:
+Otworz dalej:
 - Wariant_B_Przewodnik_Kompletny.html
-
+- Karta_Operatora_A4_Wariant_B.html
+- Wariant_B_Instalacja_i_Pierwsze_Uruchomienie.md
+- STM32_Bringup_Checklist.md

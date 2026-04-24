@@ -212,6 +212,12 @@ static void handle_get_simple(const char *arg1)
         protocol_rsp_config_u8("RUN_ALLOWED", AxisControl_RunAllowed());
     else if (strcmp(arg1, "ENABLED") == 0)
         protocol_rsp_config_u8("ENABLED", state.enabled ? 1u : 0u);
+    else if (strcmp(arg1, "HOMING_STARTED") == 0)
+        protocol_rsp_config_u8("HOMING_STARTED", state.HomingStarted ? 1u : 0u);
+    else if (strcmp(arg1, "HOMING_SUCCESSFUL") == 0)
+        protocol_rsp_config_u8("HOMING_SUCCESSFUL", state.HomingSuccessful ? 1u : 0u);
+    else if (strcmp(arg1, "HOMING_ONGOING") == 0)
+        protocol_rsp_config_u8("HOMING_ONGOING", state.HomingOngoing ? 1u : 0u);
     else if (strcmp(arg1, "CONFIG_LOADED") == 0)
         protocol_rsp_config_u8("CONFIG_LOADED", ConfigStore_IsLoaded());
     else if (strcmp(arg1, "SAFE_INTEGRATION") == 0)
@@ -424,6 +430,15 @@ static void handle_cmd(const char *arg1, const char *arg2)
         EventLog_Push(EVT_CALIB_OK, (int32_t)state.pos_um);
         AxisControl_NotifyCalibrationComplete(1u);
         protocol_rsp_saved_ok();
+    }
+    else if (strcmp(arg1, "HOME") == 0)
+    {
+#if APP_MOTION_IMPLEMENTED
+        if (MotionControl_RequestHoming()) protocol_rsp_ok();
+        else protocol_rsp_err("HOME_REJECTED");
+#else
+        protocol_rsp_err("HOME_UNAVAILABLE");
+#endif
     }
     else if (strcmp(arg1, "MOVE_REL") == 0)
     {

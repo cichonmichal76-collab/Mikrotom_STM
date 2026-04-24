@@ -1,126 +1,150 @@
-# Wariant B - instalacja, uruchomienie i commissioning
+# Wariant B - instalacja, pierwsze uruchomienie i commissioning
 
-Instrukcja opisuje kompletny wariant wdrożenia na drugim komputerze:
+Ten dokument opisuje wariant wdrozenia na drugim komputerze:
 
-- PC podłączony do urządzenia,
-- MCU STM32 podłączone przez ST-LINK oraz UART,
+- PC podpiety do urzadzenia,
+- MCU STM32 podpiete przez ST-LINK i USB-UART,
 - pierwsze uruchomienie od zera,
 - uruchomienie Agenta, GUI i komunikacji z firmware,
-- commissioning etapowy.
+- commissioning etapowy,
+- przejscie od wariantu `SAFE` do wariantu `MOTION-ENABLED`.
 
-Dokument jest przygotowany dla aktualnego stanu repozytorium na dzień `2026-04-24`.
+Stan dokumentu: `2026-04-24`.
 
-## 1. Po co powstało to oprogramowanie
+## 1. Po co powstalo to oprogramowanie
 
-Pierwotny software sterownika realizował głównie warstwę napędową:
+Pierwotny software sterownika realizowal glownie warstwe napedowa:
 
 - pomiary,
 - FOC,
 - PID,
-- trajektorię,
+- trajektorie,
 - PWM,
-- komunikację debug.
+- debug UART.
 
-To podejście było wystarczające, żeby urządzenie działało sprzętowo, ale nie tworzyło jeszcze pełnego systemu operatorskiego i uruchomieniowego.
+To wystarczalo, aby urzadzenie pracowalo na poziomie sprzetowym, ale nie dawalo jeszcze pelnego systemu operatorskiego. Brakowalo jednej, spojnej warstwy do:
 
-Nowe oprogramowanie powstało po to, aby z istniejącego sterownika zrobić:
+- bezpiecznego uruchamiania,
+- diagnostyki,
+- logowania,
+- konfiguracji,
+- API,
+- GUI,
+- przygotowania pod HMI.
 
-- narzędzie bezpieczniejszego uruchamiania,
-- warstwę diagnostyczną dla operatora i integratora,
-- bazę pod GUI, API, HMI i logowanie danych,
-- podstawę pod późniejsze pełne sterowanie ruchem z większą kontrolą ryzyka.
+Nowy system powstal po to, aby nad dzialajacym sterowaniem MCU dodac warstwe:
 
-## 2. Jak to się ma do starego softu
+- safety,
+- commissioning,
+- telemetrii,
+- event logu,
+- Agenta PC,
+- GUI i API,
+- pozniejszej integracji z HMI.
 
-### Co zostawiamy ze starego softu
+## 2. Jak nowy system ma sie do starego softu
 
-Zostawiamy sprawdzone elementy niskiego poziomu, które są związane bezpośrednio ze sprzętem:
+### Co zostawiamy
+
+Zostawiamy to, co jest bezposrednio zwiazane z hardware i bylo juz sprawdzone na urzadzeniu:
 
 - tor pomiarowy,
 - PWM,
 - ADC / OPAMP / TIM,
-- bazową strukturę projektu STM32,
-- niskopoziomową obsługę silnika i hardware,
-- sprawdzony timing oraz ISR tam, gdzie nie wolno ryzykować przypadkowego rozjazdu z urządzeniem.
+- przerwania i timing niskiego poziomu,
+- strukture projektu STM32,
+- dzialajacy fundament sterowania napedem.
 
-W praktyce oznacza to:
-
-- nie przepisujemy od zera działającego toru mocy,
-- nie wymieniamy pochopnie sterowania sprzętowego,
-- nie ruszamy na ślepo tego, co już działa na konkretnym urządzeniu.
-
-### Co poprawiamy względem starego softu
-
-Nowe podejście porządkuje i zabezpiecza sterownik:
-
-- wyłącza niepożądane automatyczne zachowania po starcie,
-- porządkuje logikę uruchamiania,
-- oddziela konfigurację operatora od logiki bezpieczeństwa,
-- dodaje spójny stan systemu i fault handling,
-- przenosi komunikację operatorską do warstwy `GUI -> Agent -> UART -> STM32`,
-- przygotowuje system do logowania i analizy.
-
-Najważniejsza zmiana koncepcyjna jest taka:
+Najwazniejsza zasada:
 
 ```text
-stary soft = głównie sterowanie napędem
-nowy soft = sterowanie napędem + safety + commissioning + diagnostyka + API + GUI
+nie przepisujemy od zera sprawdzonego toru sprzetowego
 ```
 
-### Co wdrażamy teraz
+### Co poprawiamy
 
-Aktualnie wdrażany pakiet to **safe integration baseline**. Obejmuje:
+Nowa architektura porzadkuje i zabezpiecza system:
 
-- Agent lokalny,
-- GUI operatorskie,
-- API HTTP,
-- UART do komunikacji z MCU,
-- event log,
-- SQL / SQLite po stronie Agenta,
-- commissioning etapowy,
-- warstwę safety i raportowania statusu,
-- bezpieczny start bez samoczynnego ruchu.
+- usuwa niekontrolowane automaty po starcie,
+- rozdziela konfiguracje od safety,
+- porzadkuje fault handling,
+- dodaje commissioning etapowy,
+- przenosi sterowanie operatorskie na sciezke `GUI -> Agent -> UART -> STM32`,
+- przygotowuje system pod logowanie i analize danych.
 
-### Co dojdzie później
+### Co wdrazamy teraz
 
-Ten pakiet jest pomostem do kolejnych funkcjonalności:
+Aktualnie wdrazamy dwa warianty firmware:
 
-- firmware z realnym ruchem sterowanym z nowej architektury,
-- pełniejsze wdrożenie `RUN_ALLOWED`,
-- bardziej rozbudowana kalibracja,
+| Wariant | Co daje |
+| --- | --- |
+| `SAFE` | pelny tor komunikacji, feedback, telemetrie, logi, commissioning, komendy UART bez realnego ruchu |
+| `MOTION-ENABLED` | to samo co `SAFE`, ale dodatkowo realny `HOME`, `MOVE_REL`, `MOVE_ABS` i mozliwosc przejscia do kontrolowanego ruchu |
+
+### Co dojdzie dalej
+
+Ten pakiet jest baza pod kolejne kroki:
+
+- dalsze rozwijanie sterowania ruchem,
+- bardziej rozbudowana kalibracje,
 - trwalszy zapis konfiguracji,
 - HMI jako kolejny klient Agenta,
-- szersza telemetria i analiza jakości ruchu.
+- szersza telemetrie i analize testow.
 
-## 3. Co oznacza aktualny wsad MCU
+## 3. Dwie paczki firmware MCU
 
-Aktualny firmware w `dist\mcu\` jest zbudowany jako:
+## `SAFE`
+
+Flagi:
 
 ```c
 APP_SAFE_INTEGRATION=1
 APP_MOTION_IMPLEMENTED=0
 ```
 
-W praktyce oznacza to:
+Co to oznacza w praktyce:
 
-- GUI, Agent, API, UART i telemetria mają działać,
-- firmware ma startować bez automatycznego ruchu,
-- ruch rzeczywisty nie jest jeszcze dopuszczony,
-- `RUN_ALLOWED` pozostaje zablokowany,
-- commissioning w GUI działa jako bezpieczny workflow uruchomieniowy,
-- etap 3 w tej wersji służy do walidacji przepływu i logiki, a nie do produkcyjnego testu ruchu.
+- `GUI -> Agent -> UART -> MCU` dziala,
+- statusy i telemetria dzialaja,
+- komendy UART dochodza do MCU,
+- `MOVE_REL` i `MOVE_ABS` sa celowo odrzucane,
+- os nie powinna wykonac realnego ruchu.
 
-Jeżeli po uruchomieniu:
+To jest wariant zalecany do pierwszego flashowania i pierwszej walidacji.
 
-- oś nie rusza sama,
-- GUI pokazuje status i telemetrię,
-- `RUN_ALLOWED = 0`,
+## `MOTION-ENABLED`
 
-to dla tego wydania jest to stan **prawidłowy**.
+Flagi:
 
-## 4. Architektura systemu
+```c
+APP_SAFE_INTEGRATION=0
+APP_MOTION_IMPLEMENTED=1
+```
 
-Docelowy przepływ wygląda tak:
+Co to oznacza w praktyce:
+
+- tor komunikacji i telemetrii zostaje bez zmian,
+- ruch jest odblokowany od strony implementacji,
+- homing nie startuje automatycznie po boot,
+- operator musi jawnie wyslac `CMD HOME`,
+- dopiero po HOME i spelnieniu bramek safety mozliwy jest kontrolowany ruch.
+
+To jest wariant do kolejnego kroku, po potwierdzeniu poprawnej pracy `SAFE`.
+
+## 4. Co jest nowe funkcjonalnie
+
+Nowy system wnosi:
+
+- GUI operatorskie po polsku,
+- lokalnego Agenta HTTP/UART,
+- logowanie SQL po stronie PC,
+- commissioning etapowy,
+- centralna logike safety,
+- event log firmware,
+- jawny `HOME` dla builda ruchowego,
+- rozdzielenie walidacji komunikacji od pierwszego ruchu.
+
+## 5. Architektura calego systemu
 
 ```text
 GUI / HMI
@@ -133,437 +157,373 @@ STM32 firmware
     ->
 warstwa sterowania osi
     ->
-hardware urządzenia
+hardware
 ```
 
-To bardzo ważne:
+Wazne:
 
-- GUI nie steruje hardware bezpośrednio,
-- HMI nie powinno omijać Agenta,
-- ostateczna decyzja o ruchu należy do firmware STM32.
+- GUI nie steruje hardware bezposrednio,
+- HMI nie powinno omijac Agenta,
+- ostateczna zgoda na ruch nalezy do firmware.
 
-## 5. Co trzeba przygotować
+## 6. Co musi byc przygotowane
 
-### Sprzęt
+### Sprzet
 
 - komputer z Windows,
 - sterownik z MCU STM32,
-- przewód ST-LINK do programowania przez SWD,
-- konwerter USB-UART podłączony do właściwego portu UART sterownika,
-- zasilanie urządzenia,
-- fizyczny STOP lub możliwość szybkiego odcięcia zasilania,
-- mechanika ustawiona tak, aby pierwszy test nie kończył się uderzeniem w ogranicznik.
+- ST-LINK do SWD,
+- konwerter USB-UART podpiety do wlasciwego UART sterownika,
+- zasilanie urzadzenia,
+- zewnetrzny STOP albo mozliwosc szybkiego odciecia zasilania,
+- mechanika ustawiona tak, aby pierwszy test nie skonczyl sie kolizja.
 
-### Oprogramowanie na PC
+### Oprogramowanie
 
 - Python `3.12+`,
 - `STM32CubeProgrammer`,
-- opcjonalnie `STM32CubeIDE`, jeśli na tym komputerze chcesz także kompilować firmware.
+- opcjonalnie `STM32CubeIDE`, jesli na tym komputerze chcesz tez kompilowac firmware.
 
-### Co przenieść na komputer docelowy
+## 7. Co pobrac na drugi komputer
 
-Najbezpieczniej przenieść gotową paczkę wdrożeniową przygotowaną w `dist\deployment\`.
+Najprostsza sciezka:
 
-Jeżeli pracujesz bez paczki, minimalny zestaw to:
+- pobierz paczke `PC`,
+- pobierz paczke `MCU SAFE`,
+- pobierz paczke `MCU MOTION`,
+- pobierz paczke `Dokumentacja`.
 
-- `agent\`,
-- `gui\`,
-- `scripts\`,
-- `docs\`,
-- `dist\mcu\`.
+Jesli wolisz wszystko w jednym archiwum:
 
-## 6. Commissioning etapowy - po co on jest
+- pobierz paczke `Pelny`.
 
-Przebieg etapów nie jest ozdobą GUI. To narzędzie obniżające ryzyko uruchomienia.
+Opis paczek jest w `docs/Pakiety_Wdrozeniowe_Wariant_B.md`.
 
-Jego sens jest prosty:
+## 8. Commissioning etapowy - po co on jest
+
+Etapy 1, 2 i 3 nie sa ozdoba GUI. To wymuszona kolejnosc uruchomienia:
+
+```text
+komunikacja -> logika safety -> HOME -> maly ruch testowy
+```
+
+Ich sens jest prosty:
 
 - nie przechodzimy od razu do ruchu,
-- najpierw sprawdzamy komunikację i faulty,
-- potem logikę enable/disable i reakcje ochronne,
-- dopiero na końcu przygotowujemy warunki pod kontrolowany ruch.
+- najpierw sprawdzamy feedback i faulty,
+- potem testujemy logike operatorska,
+- dopiero na koncu przygotowujemy os do pierwszego ruchu.
 
-Etapy mają wymusić kolejność:
+## 9. Etap 1 - komunikacja i diagnostyka
 
-```text
-komunikacja -> diagnostyka -> uzbrojenie -> dopiero potem ruch
-```
+### Co ma byc fizycznie podlaczone
 
-## 7. Commissioning etapowy - jak używać
+| Element | Wymaganie |
+| --- | --- |
+| ST-LINK | tylko do flashowania, moze zostac po flashu albo byc odpiety |
+| USB-UART | podlaczony obowiazkowo |
+| Zasilanie logiki MCU | wlaczone |
+| Tor mocy | najlepiej odlaczony albo mocno ograniczony pradowo |
+| Mechanika | w bezpiecznej pozycji, bez kolizji |
 
-### Etap 1 - bezpieczny / komunikacja i diagnostyka
-
-To jest etap pierwszego kontaktu z urządzeniem po wgraniu firmware.
-
-#### Co fizycznie ma być podłączone
-
-- MCU zasilone logicznie,
-- USB-UART podłączony,
-- ST-LINK może być podłączony podczas flashowania, później nie jest konieczny,
-- tor mocy najlepiej wyłączony albo ograniczony prądowo,
-- mechanika ustawiona bez ryzyka przypadkowego uszkodzenia.
-
-#### Co ustawić w sofcie
+### Co ustawic w sofcie
 
 - GUI w trybie `LIVE`,
-- etap uruchomienia = `1`,
-- wszystkie override safety wyłączone,
-- nie wysyłać komend ruchu,
-- nie traktować `ENABLE` jako zgody na ruch.
+- aktywny etap `1`,
+- brak override safety,
+- nie wysylac komend ruchu.
 
-#### Co zrobić
+### Co zrobic
 
-1. Wgraj firmware do MCU.
+1. Wgraj wariant `SAFE`.
 2. Uruchom Agenta.
 3. Uruchom GUI.
-4. Otwórz `Podgląd online`.
-5. Sprawdź `Połączenie`, `FAULT`, `Etap`, `VBUS`, `RUN_ALLOWED`.
-6. Otwórz `UART`, `Logi`, `SQL`.
-7. Potwierdź, że oś nie rusza.
+4. Otworz `Podglad online`.
+5. Sprawdz `Polaczenie`, `FAULT`, `Etap`, `VBUS`, `SAFE_INTEGRATION`, `MOTION_IMPLEMENTED`.
+6. Otworz `UART`, `Logi`, `SQL`, `API`.
+7. Potwierdz, ze os pozostaje nieruchoma.
 
-#### Jaki wynik jest poprawny
+### Jaki wynik jest poprawny
 
-- komunikacja działa,
+- komunikacja dziala,
+- telemetria przychodzi,
+- komendy UART sa przyjmowane,
 - brak samoczynnego ruchu,
-- `RUN_ALLOWED = 0`,
-- fault jest pusty albo jasno opisany,
-- statusy są spójne.
-
-### Etap 2 - uzbrajanie i test logiki
-
-To etap sprawdzania, czy system logicznie reaguje na komendy operatorskie.
-
-#### Co fizycznie ma być podłączone
-
-- USB-UART podłączony,
-- zasilanie logiki aktywne,
-- tor mocy nadal ostrożnie: wyłączony, ograniczony albo przygotowany laboratoryjnie,
-- mechanika sprawdzona,
-- operator gotowy do użycia `STOP` / `QSTOP`.
-
-#### Co ustawić w sofcie
-
-- przełącz etap na `2`,
-- limity ustaw zachowawczo,
-- override safety pozostaw wyłączone, jeśli nie ma wyraźnej potrzeby,
-- używaj tylko testów logicznych: `ENABLE`, `DISABLE`, `STOP`, `QSTOP`.
-
-#### Co zrobić
-
-1. Przejdź do etapu `2`.
-2. Sprawdź reakcję na `ENABLE`.
-3. Sprawdź reakcję na `DISABLE`.
-4. Sprawdź `STOP`.
-5. Sprawdź `QSTOP`.
-6. Sprawdź, czy fault i logi zapisują zdarzenia.
-
-#### Jaki wynik jest poprawny
-
-- komendy są przyjmowane albo odrzucane logicznie,
-- system nie przechodzi w niekontrolowany stan,
-- `STOP` i `QSTOP` działają,
-- nadal nie ma ruchu rzeczywistego w obecnym buildzie.
-
-### Etap 3 - przygotowanie pod ruch kontrolowany
-
-To etap końcowy workflow commissioning.
-
-#### Bardzo ważne zastrzeżenie
-
-W **aktualnym pakiecie safe integration** etap 3:
-
-- służy do walidacji GUI i logiki,
-- nie jest jeszcze równoznaczny z gotowością do realnego ruchu,
-- nie powinien być traktowany jako zgoda na test produkcyjny osi.
-
-#### Co fizycznie ma być podłączone
-
-Dla obecnego builda:
-
-- dokładnie tak samo ostrożnie jak dla etapu 2,
-- nadal traktuj układ jako wersję uruchomieniowo-diagnostyczną.
-
-Dla przyszłego builda z ruchem:
-
-- tor mocy aktywny i kontrolowany,
-- mechanika wolna od kolizji,
-- ograniczenia ruchu ustawione konserwatywnie,
-- kalibracja potwierdzona,
-- operator stale nadzoruje urządzenie.
-
-#### Co ustawić w sofcie
-
-- etap `3`,
-- zachowawcze limity prądu, prędkości i przyspieszenia,
-- brak niepotrzebnych override,
-- potwierdzona kalibracja, gdy tylko pojawi się build z ruchem.
-
-#### Co zrobić teraz
-
-1. Wejdź do etapu `3` tylko po przejściu etapów 1 i 2.
-2. Sprawdź, czy GUI i statusy commissioning są spójne.
-3. Potwierdź, że nadal nie dochodzi do niekontrolowanego ruchu.
-4. Traktuj ten etap jako przygotowanie pod przyszły firmware motion-enabled.
-
-## 8. Sprawdzenie połączeń przed uruchomieniem
-
-Zanim cokolwiek wgrasz lub uruchomisz:
-
-1. Upewnij się, że urządzenie nie stoi na końcu zakresu mechanicznego.
-2. Przygotuj zewnętrzny STOP lub odcięcie zasilania.
-3. Podłącz ST-LINK do SWD.
-4. Podłącz USB-UART do właściwego portu komunikacyjnego.
-5. Zanotuj numer portu COM w Menedżerze urządzeń.
-6. Jeżeli to pierwszy test - ogranicz energię układu.
-
-## 9. Wgranie firmware do MCU
-
-### 9.1. Otwórz katalog projektu lub paczki
-
-Na komputerze docelowym otwórz `cmd` lub PowerShell i przejdź do katalogu paczki:
-
-```bat
-cd C:\sciezka\do\pakietu
-```
-
-### 9.2. Sprawdź, czy jest STM32CubeProgrammer
-
-Skrypt flashujący oczekuje standardowej instalacji `STM32CubeProgrammer`.
-
-### 9.3. Wgraj wsad
-
-Uruchom:
-
-```bat
-scripts\flash_mcu_stlink.bat
-```
-
-Domyślnie zostanie użyty:
-
-```text
-dist\mcu\Mikrotom_STM_latest.hex
-```
-
-Jeżeli chcesz wskazać plik ręcznie:
-
-```bat
-scripts\flash_mcu_stlink.bat dist\mcu\Mikrotom_STM_safe_integration_20260424.hex
-```
-
-### 9.4. Co ma się stać po flashowaniu
-
-- brak automatycznego ruchu,
-- dostępny UART,
-- możliwy odczyt statusu,
 - `SAFE_INTEGRATION = 1`,
-- `MOTION_IMPLEMENTED = 0`,
-- `RUN_ALLOWED = 0`.
+- `MOTION_IMPLEMENTED = 0`.
 
-## 10. Instalacja części PC
+## 10. Etap 2 - logika operatorska i safety
 
-### 10.1. Utworzenie środowiska Python
+### Co ma byc fizycznie podlaczone
+
+| Element | Wymaganie |
+| --- | --- |
+| USB-UART | podlaczony |
+| Zasilanie logiki | wlaczone |
+| Tor mocy | nadal ostroznie, najlepiej ograniczony pradowo |
+| Mechanika | sprawdzona i gotowa na ewentualna reakcje awaryjna |
+| STOP / odciecie zasilania | w zasiegu operatora |
+
+### Co ustawic w sofcie
+
+- aktywny etap `2`,
+- limity konserwatywne,
+- brak niepotrzebnych override.
+
+### Co zrobic
+
+1. Wyslij `ENABLE`.
+2. Wyslij `DISABLE`.
+3. Wyslij `STOP`.
+4. Wyslij `QSTOP`.
+5. Sprawdz logi i odpowiedzi firmware.
+6. Sprawdz timeout komunikacji, jesli Agent przestanie wysylac heartbeat.
+
+### Jaki wynik jest poprawny
+
+- firmware reaguje logicznie,
+- faulty i zdarzenia sa widoczne,
+- `STOP` i `QSTOP` dzialaja,
+- w wariancie `SAFE` nadal nie ma realnego ruchu.
+
+## 11. Etap 3 - przygotowanie do ruchu kontrolowanego
+
+To jest etap, w ktorym zaczynamy pracowac z wariantem `MOTION-ENABLED`.
+
+### Co ma byc fizycznie podlaczone
+
+| Element | Wymaganie |
+| --- | --- |
+| USB-UART | podlaczony |
+| Zasilanie logiki | wlaczone |
+| Tor mocy | wlaczony, ale z zachowawczymi limitami i kontrola operatora |
+| Mechanika | wolna od kolizji i ustawiona z zapasem od ogranicznikow |
+| STOP / odciecie zasilania | gotowe do natychmiastowego uzycia |
+
+### Co ustawic w sofcie
+
+- wgraj wariant `MOTION-ENABLED`,
+- aktywny etap `3`,
+- konserwatywne `MAX_CURRENT`, `MAX_VELOCITY`, `MAX_ACCELERATION`,
+- potwierdzone soft limity,
+- brak niepotrzebnych override.
+
+### Co zrobic po kolei
+
+1. Sprawdz, czy `SAFE_INTEGRATION = 0`.
+2. Sprawdz, czy `MOTION_IMPLEMENTED = 1`.
+3. Potwierdz brak aktywnego faultu.
+4. Wyslij `HOME`.
+5. Obserwuj statusy `HOMING_STARTED`, `HOMING_ONGOING`, `HOMING_SUCCESSFUL`.
+6. Gdy homing sie powiedzie, sprawdz czy `RUN_ALLOWED` moze przejsc na `1`.
+7. Wyslij bardzo maly `MOVE_REL`, na przyklad `100 um`.
+8. Potwierdz kierunek ruchu i zatrzymanie.
+9. Dopiero potem wolno przejsc do wiekszego testu.
+
+### Jaki wynik jest poprawny
+
+- homing startuje tylko po `CMD HOME`,
+- os nie rusza sama po boot,
+- ruch jest mozliwy dopiero po HOME i spelnieniu bramek safety,
+- pierwszy maly ruch jest zgodny z oczekiwanym kierunkiem.
+
+## 12. Krok po kroku - pierwszy raz na nowym komputerze
+
+### Krok 1. Rozpakuj paczki
+
+Na komputerze docelowym rozpakuj:
+
+- `Pakiet PC`,
+- `Pakiet MCU SAFE`,
+- `Pakiet Dokumentacja`.
+
+`Pakiet MCU MOTION` zachowaj na pozniej.
+
+### Krok 2. Sprawdz wymagania
 
 Uruchom:
 
 ```bat
-scripts\install_pc.bat
+01_SPRAWDZ_WYMAGANIA_PC.bat
 ```
 
-Skrypt wykona:
+albo w pakiecie pelnym:
 
-- wykrycie Pythona,
-- utworzenie `.venv`,
-- instalację zależności Agenta.
+```bat
+01_SPRAWDZ_WYMAGANIA.bat
+```
 
-### 10.2. Przełączenie GUI na tryb LIVE
+### Krok 3. Wgraj `SAFE`
 
 Uruchom:
+
+```bat
+02_WGRAJ_MCU_SAFE_STLINK.bat
+```
+
+albo recznie:
+
+```bat
+scripts\flash_mcu_safe_stlink.bat
+```
+
+### Krok 4. Zainstaluj czesc PC
+
+Uruchom:
+
+```bat
+02_INSTALUJ_PC.bat
+```
+
+Skrypt:
+
+- wykryje Pythona,
+- utworzy `.venv`,
+- zainstaluje zaleznosci Agenta.
+
+### Krok 5. Przelacz GUI na `LIVE`
+
+Uruchom:
+
+```bat
+03_USTAW_GUI_LIVE.bat
+```
+
+albo:
 
 ```bat
 scripts\configure_gui_live.bat
 ```
 
-To przełącza GUI z trybu demonstracyjnego na pracę z Agentem pod adresem:
+### Krok 6. Sprawdz port COM
 
-```text
-http://127.0.0.1:8000
+W Menedzerze urzadzen Windows znajdz numer portu USB-UART, na przyklad `COM3`.
+
+### Krok 7. Uruchom Agenta
+
+```bat
+04_URUCHOM_AGENT.bat
 ```
 
-## 11. Uruchomienie Agenta
-
-### 11.1. Ustal numer portu COM
-
-Sprawdź numer portu w Menedżerze urządzeń, np.:
-
-```text
-COM3
-```
-
-### 11.2. Uruchom Agenta
-
-W pierwszym oknie terminala:
+albo:
 
 ```bat
 scripts\run_agent.bat COM3
 ```
 
-albo skryptem z pytaniem o port:
+### Krok 8. Uruchom GUI
 
 ```bat
-scripts\run_agent_prompt.bat
+05_URUCHOM_GUI.bat
 ```
 
-### 11.3. Co oznacza poprawny start Agenta
-
-- port COM zostaje otwarty,
-- Agent nasłuchuje UART,
-- API działa na `127.0.0.1:8000`,
-- GUI może pobierać statusy, telemetrię i logi.
-
-## 12. Uruchomienie GUI
-
-W drugim oknie terminala uruchom:
+albo:
 
 ```bat
 scripts\run_gui.bat
 ```
 
-Następnie otwórz:
+Po uruchomieniu otworz:
 
 ```text
 http://127.0.0.1:8080/gui/
 ```
 
-## 13. Pierwsza kontrola po uruchomieniu
+### Krok 9. Wykonaj Etap 1 i Etap 2
 
-Po wejściu do GUI przejdź do `Podgląd online` i sprawdź:
+Na tym etapie nie wgrywaj jeszcze `MOTION-ENABLED`. Najpierw potwierdz:
 
-1. status połączenia,
-2. stan osi,
-3. aktywny fault,
-4. etap uruchomienia,
-5. `RUN_ALLOWED`,
-6. `VBUS`,
-7. brak samoczynnego ruchu.
+- komunikacje,
+- telemetrie,
+- logi,
+- API,
+- reakcje na `ENABLE`, `DISABLE`, `STOP`, `QSTOP`,
+- brak niekontrolowanego ruchu.
 
-Następnie sprawdź:
+### Krok 10. Dopiero potem wgraj `MOTION-ENABLED`
 
-- `UART`,
-- `Logi`,
-- `SQL`,
-- `API`.
+Uruchom:
 
-## 14. Minimalny scenariusz dla laika
+```bat
+02_WGRAJ_MCU_MOTION_STLINK.bat
+```
 
-Najprostsza kolejność działań:
+albo:
 
-1. Skopiuj paczkę na komputer docelowy.
-2. Uruchom skrypt sprawdzający wymagania.
-3. Wgraj firmware do MCU.
-4. Uruchom instalację PC.
-5. Przełącz GUI na `LIVE`.
-6. Uruchom Agenta z właściwym `COMx`.
-7. Uruchom GUI.
-8. Otwórz dokumentację i wykonaj commissioning etap 1.
+```bat
+scripts\flash_mcu_motion_stlink.bat
+```
 
-## 15. Co wolno oczekiwać od aktualnej wersji
+Po flashu przejdz do Etapu 3 i wykonaj `HOME`.
 
-Aktualna wersja jest przeznaczona do:
+## 13. Co sprawdzic przed pierwszym ruchem
 
-- sprawdzenia komunikacji PC <-> Agent <-> UART <-> STM32,
-- sprawdzenia statusów safety,
-- odczytu telemetrii i zdarzeń,
-- walidacji commissioning workflow,
-- sprawdzenia logowania do SQLite,
-- przygotowania pod późniejszy firmware z ruchem.
+- poprawny kierunek pomiaru pozycji,
+- sensowne `VBUS`,
+- brak aktywnego faultu,
+- dzialanie `STOP` i `QSTOP`,
+- poprawne soft limity,
+- centralna pozycje mechaniki z dala od skrajow,
+- gotowe odciecie zasilania,
+- bardzo male pierwsze przemieszczenie.
 
-Aktualna wersja nie jest jeszcze przeznaczona do:
+Pelna checklista jest w `docs/STM32_Bringup_Checklist.md`.
 
-- produkcyjnego ruchu osi,
-- testów dynamicznych z pełnym obciążeniem,
-- ostatecznego odbioru funkcji ruchowych.
+## 14. Najczestsze problemy
 
-## 16. Najczęstsze problemy
-
-### `Python was not found`
+### Python nie jest znaleziony
 
 Przyczyna:
 
 - Python nie jest zainstalowany albo nie ma go w `PATH`.
 
-Rozwiązanie:
+Rozwiazanie:
 
 - zainstaluj Python `3.12+`,
-- uruchom ponownie `scripts\install_pc.bat`.
+- uruchom ponownie `02_INSTALUJ_PC.bat`.
 
-### Agent nie łączy się z portem COM
-
-Przyczyna:
-
-- zły numer portu,
-- port jest zajęty przez inny program,
-- USB-UART jest podłączony nie tam, gdzie trzeba.
-
-Rozwiązanie:
-
-- sprawdź Menedżer urządzeń,
-- zamknij inne programy używające COM,
-- uruchom `scripts\run_agent.bat COMx` z poprawnym numerem.
-
-### GUI otwiera się, ale pokazuje DEMO
+### Agent nie laczy sie z UART
 
 Przyczyna:
 
-- GUI nie zostało przełączone na LIVE.
+- zly `COM`,
+- port zajety przez inny program,
+- bledne podpienie USB-UART.
 
-Rozwiązanie:
+Rozwiazanie:
 
-- uruchom:
+- sprawdz Menedzer urzadzen,
+- zamknij inne programy korzystajace z portu,
+- uruchom Agenta z poprawnym `COMx`.
+
+### GUI pokazuje DEMO
+
+Przyczyna:
+
+- GUI nie zostalo przelaczone na `LIVE`.
+
+Rozwiazanie:
 
 ```bat
 scripts\configure_gui_live.bat
 ```
 
-### GUI działa, ale brak danych LIVE
+### SAFE dziala, ale ruchu nadal nie ma
 
-Przyczyna:
+To jest poprawne zachowanie wariantu `SAFE`.
 
-- Agent nie działa,
-- UART nie działa,
-- MCU nie odpowiada po protokole.
+### MOTION jest wgrany, ale nadal nie ma ruchu
 
-Rozwiązanie:
+Najczestsze przyczyny:
 
-- sprawdź terminal Agenta,
-- sprawdź zakładkę `UART`,
-- sprawdź `Logi`,
-- sprawdź `API`.
+- nie wykonano `HOME`,
+- aktywny fault,
+- aktywny etap inny niz `3`,
+- `RUN_ALLOWED` nadal jest zablokowany przez safety.
 
-### Flashowanie nie działa
-
-Przyczyna:
-
-- brak `STM32CubeProgrammer`,
-- brak połączenia ST-LINK,
-- MCU nie jest widziane przez SWD.
-
-Rozwiązanie:
-
-- sprawdź przewód ST-LINK,
-- sprawdź zasilanie logiki,
-- uruchom `STM32CubeProgrammer` ręcznie,
-- ponów `scripts\flash_mcu_stlink.bat`.
-
-## 17. Zalecenia bezpieczeństwa
-
-- Nie zakładaj, że działające GUI oznacza gotowość do ruchu.
-- Nie używaj etapu 3 jako zgody na ruch w obecnym buildzie.
-- Nie interpretuj `Połączenie OK` jako potwierdzenia bezpieczeństwa.
-- Na początku zawsze pracuj zachowawczo.
-- Fault, VBUS i commissioning traktuj jako sygnały decyzyjne, nie dekoracyjne.
-
-## 18. Dokumenty powiązane
+## 15. Dokumenty powiazane
 
 - `docs/Wariant_B_Manual_Uzytkownika_GUI.md`
 - `docs/STM32_Bringup_Checklist.md`
+- `docs/Pakiety_Wdrozeniowe_Wariant_B.md`
 - `docs/HMI_Protocol.md`

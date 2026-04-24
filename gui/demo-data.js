@@ -15,6 +15,8 @@ window.DEMO_STATE = {
     motion_implemented: 1,
     position_um: 0,
     position_set_um: 0,
+    vbus_V: 12.0,
+    vbus_valid: 1,
     brake_installed: 0,
     collision_sensor_installed: 0,
     ptc_installed: 1,
@@ -136,6 +138,7 @@ window.demoTick = function() {
   }
 
   telemetry.ts_ms = now;
+  status.vbus_V = 12.0 + Math.sin(now / 1200) * 0.08;
   telemetry.pos_um = Math.round(status.position_um);
   telemetry.pos_set_um = Math.round(status.position_set_um);
   telemetry.vel_set_um_s = 0;

@@ -119,6 +119,8 @@ Supported names in the current firmware:
 - `SAFE_INTEGRATION`
 - `MOTION_IMPLEMENTED`
 - `POS`
+- `VBUS`
+- `VBUS_VALID`
 - `EVENT_COUNT`
 - `EVENT_POP`
 - `VERSION`
@@ -129,6 +131,8 @@ Examples:
 GET STATE
 GET RUN_ALLOWED
 GET CONFIG_LOADED
+GET VBUS
+GET VBUS_VALID
 GET VERSION
 ```
 
@@ -348,7 +352,8 @@ Field meanings:
 Recommended polling for a UART HMI host:
 
 - `GET STATE`, `GET FAULT`, `GET RUN_ALLOWED`: every `100-250 ms`
-- `GET CONFIG_LOADED`, `GET MOTION_IMPLEMENTED`: every `500-1000 ms`
+- `GET CONFIG_LOADED`, `GET MOTION_IMPLEMENTED`, `GET VBUS_VALID`, `GET VBUS`:
+  every `500-1000 ms`
 - `GET PARAM/CONFIG` values: on page entry or after a save
 - `GET EVENT_COUNT` + `GET EVENT_POP`: every `250-1000 ms`
 
@@ -377,6 +382,7 @@ The HMI must follow these rules:
 
 - disable movement widgets when `RUN_ALLOWED != 1`
 - also disable movement widgets when `MOTION_IMPLEMENTED != 1`
+- also disable movement widgets when `VBUS_VALID != 1`
 - keep `STOP` and `QSTOP` always visible
 - show explicit warning when `STATE=CONFIG`
 - show fault acknowledge only when a fault is active

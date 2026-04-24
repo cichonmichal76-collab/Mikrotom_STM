@@ -144,8 +144,11 @@ The new system adds:
 - `watchdogs.*`
 - `limits.*`
 - `safety_config.*`
+- `safety_monitor.*`
 
 This turns safety into explicit software ownership instead of implicit behavior.
+The current integration also restores measured current and measured motor
+supply voltage (`VBUS`) as real inputs for runtime fault decisions.
 
 ### State machine
 
@@ -180,6 +183,12 @@ as:
 ```text
 TEL,ts,pos,pos_set,vel,vel_set,iq_ref,iq_meas,state,fault
 ```
+
+Supply voltage is exposed separately through `GET VBUS` and then surfaced by
+the agent as `/api/status.vbus_V`. This keeps the telemetry packet compatible
+while still making undervoltage and overvoltage supervision visible in the GUI.
+`GET VBUS_VALID` is used to distinguish a real measured value from startup
+state before the first ADC conversion.
 
 ### Event log
 
@@ -272,6 +281,7 @@ if (!AxisControl_RunAllowed())
 The intended conditions are:
 
 - no active faults
+- VBUS sampled and inside the valid operating window
 - commissioning stage 3
 - `safe_mode == 0`
 - calibration valid
@@ -320,15 +330,18 @@ single-purpose motor loop.
 
 - ISR path still stays real-time focused
 - telemetry sampling and control gating are integrated more deliberately
+- runtime safety monitoring runs before FOC dispatch
 - business workflow remains outside ISR
 
 The callback order is intentionally structured around:
 
 1. current measurement
 2. position update
-3. real-time control guard
-4. telemetry sample creation
-5. FOC only when allowed
+3. runtime safety monitor
+4. immediate output inhibit on active fault
+5. real-time control guard
+6. telemetry sample creation
+7. FOC only when allowed
 
 ## Conflicts solved by the new design
 
@@ -361,6 +374,32 @@ The callback order is intentionally structured around:
 #### Solution
 
 - explicit safe startup and staged commissioning
+
+### Power-supply supervision
+
+#### Problem
+
+- the expanded safety layer needed a real measured supply-voltage input, not
+  only software state
+
+#### Solution
+
+- restore the original VBUS ADC path
+- expose `GET VBUS` and `GET VBUS_VALID` through the protocol and agent status
+  endpoint
+- latch undervoltage and overvoltage faults through `safety_monitor.*`
+
+### Runtime fault reaction
+
+#### Problem
+
+- a fault detected in the real-time path must stop outputs before another
+  control step can energize the motor
+
+#### Solution
+
+- run `SafetyMonitor_UpdateRt()` before `AxisControl_UpdateRt()` and FOC
+- force PWM/output references to zero on STOP, QSTOP, disable, or active fault
 
 ## New capabilities
 

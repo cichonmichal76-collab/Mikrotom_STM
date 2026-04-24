@@ -185,6 +185,7 @@ function explainRunAllowed(status) {
   );
 
   if (Number(status.motion_implemented ?? 1) !== 1) blockers.push("this build still has motion disabled");
+  if (Number(status.vbus_valid || 0) !== 1) blockers.push("VBUS has not been sampled yet");
   if (Number(status.config_loaded || 0) !== 1) blockers.push("configuration was not loaded from flash");
   if (Number(status.fault_mask || 0) !== 0) blockers.push("fault active");
   if (String(status.axis_state || "") === "CONFIG") blockers.push("axis is waiting for configuration or calibration");
@@ -201,6 +202,7 @@ function explainRunAllowed(status) {
 }
 
 function renderStatusDetails(status) {
+  const vbusValid = Number(status.vbus_valid || 0) === 1;
   const items = [
     ["Axis enabled", formatBool(status.enabled)],
     ["Config store loaded", formatBool(status.config_loaded)],
@@ -212,6 +214,8 @@ function renderStatusDetails(status) {
     ["Controlled motion", Number(status.controlled_motion || 0) ? "ON" : "OFF"],
     ["Allow motion without calibration", formatBool(status.allow_motion_without_calibration)],
     ["Calibration valid", formatBool(status.calib_valid)],
+    ["VBUS", vbusValid ? `${fmt(status.vbus_V, 2)} V` : "not sampled"],
+    ["VBUS valid", formatBool(status.vbus_valid)],
     ["PTC installed", formatBool(status.ptc_installed)],
     ["Backup supply installed", formatBool(status.backup_supply_installed)],
     ["Fault mask", status.fault_mask ?? "--"]
@@ -301,7 +305,8 @@ function renderAll() {
   const runAllowed = Number(status.run_allowed || 0);
   const stage = Number(status.commissioning_stage || 1);
   const motionImplemented = Number(status.motion_implemented ?? 1);
-  const liveMotionReady = runAllowed === 1 && motionImplemented === 1;
+  const vbusValid = Number(status.vbus_valid || 0) === 1;
+  const liveMotionReady = runAllowed === 1 && motionImplemented === 1 && vbusValid;
 
   setBadge("badge-connection", uiState.connected ? "Connection OK" : "Connection lost", uiState.connected ? "ok" : "err");
   setBadge("badge-state", `Axis ${axisState}`, stateTone(axisState));
@@ -313,6 +318,7 @@ function renderAll() {
   $("kpi-pos-set").textContent = `${fmt(telemetry.pos_set_um ?? status.position_set_um ?? 0)} um`;
   $("kpi-vel").textContent = `${fmt(telemetry.vel_um_s ?? 0)} um/s`;
   $("kpi-iq").textContent = `${fmt(telemetry.iq_meas_mA ?? 0)} mA`;
+  $("kpi-vbus").textContent = Number(status.vbus_valid || 0) === 1 ? `${fmt(status.vbus_V, 2)} V` : "WAIT";
 
   $("cfg-config-loaded").checked = Number(status.config_loaded || 0) === 1;
   $("cfg-enabled").checked = Number(status.enabled || 0) === 1;

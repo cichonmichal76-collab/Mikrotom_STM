@@ -2,3 +2,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 agent/mikrotom_agent.sqlite3
+stm32_cubeide/Debug/
+stm32_cubeide/Release/
+stm32_cubeide/*.elf
+stm32_cubeide/*.hex
+stm32_cubeide/*.bin
+stm32_cubeide/*.map
+stm32_cubeide/*.list

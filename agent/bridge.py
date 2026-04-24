@@ -364,6 +364,8 @@ class FirmwareTransport:
             "safe_integration": int(self._read_param_value("SAFE_INTEGRATION")),
             "motion_implemented": int(self._read_param_value("MOTION_IMPLEMENTED")),
             "position_um": int(self._read_param_value("POS")),
+            "vbus_V": float(self._read_param_value("VBUS")),
+            "vbus_valid": int(self._read_param_value("VBUS_VALID")),
             "position_set_um": int(telemetry["pos_set_um"]),
             "brake_installed": int(self._read_config("BRAKE_INSTALLED")),
             "collision_sensor_installed": int(self._read_config("COLLISION_SENSOR_INSTALLED")),

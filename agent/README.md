@@ -54,6 +54,7 @@ The agent also persists MCU-facing logs to SQLite:
 - safety installation flags and override flags
 - calibration validity and calibration parameters
 - motion limits and setpoints
+- measured motor-supply voltage (`vbus_V`) and validity flag (`vbus_valid`)
 
 ## Environment variables
 

@@ -25,7 +25,7 @@ GUI -> Agent -> UART -> STM32 -> FOC -> Hardware
 ```text
 Application Layer
     -> Control Layer (AxisControl)
-        -> Safety Layer (Fault, Watchdog, Limits)
+        -> Safety Layer (Fault, Watchdog, Limits, SafetyMonitor)
             -> Communication Layer (Protocol, Telemetry, EventLog)
                 -> Hardware Control (FOC, PWM, ADC, Timers)
 ```
@@ -73,10 +73,15 @@ The repository currently keeps imported firmware in a flat `firmware/`
 directory to avoid breaking safe integration before the full CubeIDE project is
 assembled.
 
+The importable STM32CubeIDE build target now lives in `stm32_cubeide/`. It is
+based on the original working project and mirrors the current `firmware/*.c`
+and `firmware/*.h` files into `Core/Src` and `Core/Inc`.
+
 Current file ownership by target layer:
 
 - `App`: `axis_state.*`, `axis_control.*`, `commissioning.*`
-- `Safety`: `fault.*`, `watchdogs.*`, `limits.*`, `safety_config.*`
+- `Safety`: `fault.*`, `watchdogs.*`, `limits.*`, `safety_config.*`,
+  `safety_monitor.*`
 - `Protocol`: `protocol.*`, `telemetry.*`, `eventlog.*`
 - `Config`: `config_store.*`, `calibration.*`, `fw_version.*`
 - `Control`: `motorState.*` plus external `foc.*`, `pid.*`, `trajectory.*`
@@ -106,6 +111,7 @@ typedef struct {
     float iq_meas;
 
     float maxcurrent;
+    float Vbus;
 
     uint8_t enabled;
     uint8_t calibrated;
@@ -209,6 +215,20 @@ Responsibility:
 
 - hold configurable safety flags and conscious overrides
 
+#### `safety_monitor`
+
+Responsibility:
+
+- supervise runtime electrical and motion conditions before FOC execution
+- raise deterministic faults for overcurrent, undervoltage, overvoltage,
+  overspeed, tracking error, and post-homing soft-limit violations
+- debounce fast signals so one noisy sample does not immediately latch a fault
+
+Primary API:
+
+- `SafetyMonitor_Init()`
+- `SafetyMonitor_UpdateRt(...)`
+
 ### Protocol layer
 
 #### `protocol`
@@ -270,6 +290,7 @@ Responsibility:
 
 - hardware-facing runtime state update
 - current sampling and encoder-derived position update
+- VBUS ADC sampling and conversion to motor supply voltage
 
 #### `foc`, `pid`, `trajectory`
 
@@ -292,6 +313,18 @@ GUI -> Agent/API -> Protocol -> AxisControl -> FOC -> Motor
 STM32 -> Telemetry -> UART -> Agent -> GUI
 ```
 
+### Runtime status path
+
+```text
+STM32 -> Protocol GET values -> Agent /api/status -> GUI
+```
+
+`VBUS` is intentionally exposed through the status path instead of extending the
+asynchronous `TEL,...` line. This keeps the real-time telemetry packet stable
+while still making supply-voltage supervision visible to the operator.
+`VBUS_VALID` indicates whether at least one ADC conversion has populated the
+value. Motion must remain inhibited while this flag is false.
+
 ## Main loop
 
 The firmware main loop should remain minimal and deterministic:
@@ -311,11 +344,13 @@ while (1)
 The ADC-injected conversion callback remains the main real-time path:
 
 ```text
-1. current measurement
-2. position update
-3. AxisControl_UpdateRt()
-4. Telemetry_Sample()
-5. FOC (only if RUN_ALLOWED)
+1. current measurement and VBUS state already latched from ADC callbacks
+2. position and velocity update
+3. SafetyMonitor_UpdateRt()
+4. immediate output inhibit if a fault is active
+5. AxisControl_UpdateRt()
+6. Telemetry_Sample()
+7. FOC only when RUN_ALLOWED is true and outputs are not inhibited
 ```
 
 ## Implementation rules
@@ -388,6 +423,7 @@ if (!AxisControl_RunAllowed())
 The intended conditions are:
 
 - no active faults
+- VBUS sampled and inside the valid operating window
 - commissioning stage 3
 - `safe_mode == 0`
 - calibration valid
@@ -400,17 +436,24 @@ The intended conditions are:
 - no motion
 - communication verified
 - faults and watchdogs verified
+- `GET VBUS_VALID` becomes `1`
+- `GET VBUS` returns a plausible supply voltage or a safe known value
 
 ### Stage 2
 
 - commissioning logic verified
 - enable/disable path verified
+- STOP, QSTOP, fault, and disable paths force output inhibit
 
 ### Stage 3
 
 - first controlled motion
 - conservative limits
 - operator supervision with STOP/QSTOP ready
+- runtime faults verified with safe thresholds or controlled simulation
+
+The detailed bring-up checklist is maintained in
+`docs/STM32_Bringup_Checklist.md`.
 
 ## Common failure modes
 

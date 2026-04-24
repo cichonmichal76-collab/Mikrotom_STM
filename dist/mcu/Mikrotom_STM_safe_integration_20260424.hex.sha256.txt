@@ -1,0 +1,3 @@
+SHA256 hash of C:\Users\michal.cichon\Desktop\Mikrotom_STM\scripts\..\dist\mcu\Mikrotom_STM_safe_integration_20260424.hex:
+81842c0cd5e1cf999b756ceb30bd21fe49b8c817223f4184f31b1fc5cf2a8de0
+CertUtil: -hashfile command completed successfully.

@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv/
 agent/mikrotom_agent.sqlite3
 stm32_cubeide/Debug/
 stm32_cubeide/Release/

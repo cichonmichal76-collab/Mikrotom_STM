@@ -9,6 +9,8 @@ Repository layout:
 - `agent/` - local REST bridge from GUI to the STM32 UART protocol
 - `docs/` - PRD and system requirements documents
 - `gui/` - static operator GUI for dashboard, safety, commissioning, and motion control
+- `scripts/` - Windows batch helpers for PC setup, GUI/agent startup, MCU build, and ST-LINK flashing
+- `dist/mcu/` - generated safe-integration MCU HEX/BIN files
 
 The imported package currently reflects a safe-integration baseline with protocol, telemetry, state management, commissioning, and safety support modules prepared for further integration with the original motion-control implementation.
 
@@ -30,3 +32,16 @@ Architecture note:
 - the software evolution from the original FOC-centric firmware to the safety and GUI-oriented system is documented in `docs/STM32_Software_Evolution.md`
 - the staged bench bring-up sequence is documented in `docs/STM32_Bringup_Checklist.md`
 - a recommended future project layout is scaffolded under `firmware/Core/`
+
+Quick PC setup:
+
+- run `scripts\install_pc.bat`
+- run `scripts\configure_gui_live.bat` for real STM32 communication
+- run `scripts\run_agent.bat COM3`
+- run `scripts\run_gui.bat`
+
+MCU firmware:
+
+- generated HEX/BIN files are in `dist/mcu/`
+- regenerate them with `scripts\build_mcu_release.bat`
+- flash with `scripts\flash_mcu_stlink.bat`

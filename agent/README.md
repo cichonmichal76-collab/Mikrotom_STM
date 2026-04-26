@@ -45,6 +45,8 @@ The agent also persists MCU-facing logs to SQLite:
 - protocol TX/RX lines
 - telemetry samples
 - event log entries
+- sessions, command history, config snapshots, config changes
+- motion runs and fault history
 
 `/api/status` also surfaces the new program metadata needed by the GUI:
 
@@ -67,6 +69,10 @@ The agent also persists MCU-facing logs to SQLite:
 - `MIKROTOM_SQLITE_PATH` default: `agent/mikrotom_agent.sqlite3`
 
 Set `MIKROTOM_SQLITE_PATH=off` to disable persistent logging.
+
+Schema overview:
+
+- [Agent_SQLite_Schema.md](/C:/Users/cicho/OneDrive/Pulpit/Mikrotom_STM/docs/Agent_SQLite_Schema.md)
 
 ## Install
 

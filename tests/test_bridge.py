@@ -7,14 +7,14 @@ from agent.bridge import FirmwareError, FirmwareTransport
 
 class FakeLogStore:
     def __init__(self) -> None:
-        self.telemetry_rows: list[tuple[str, dict[str, int]]] = []
-        self.event_rows: list[tuple[str, dict[str, int | str]]] = []
+        self.telemetry_rows: list[tuple[str, dict[str, int], dict[str, object]]] = []
+        self.event_rows: list[tuple[str, dict[str, int | str], dict[str, object]]] = []
 
-    def log_telemetry(self, port: str, sample: dict[str, int]) -> None:
-        self.telemetry_rows.append((port, sample))
+    def log_telemetry(self, port: str, sample: dict[str, int], **kwargs) -> None:
+        self.telemetry_rows.append((port, sample, kwargs))
 
-    def log_event(self, port: str, event: dict[str, int | str]) -> None:
-        self.event_rows.append((port, event))
+    def log_event(self, port: str, event: dict[str, int | str], **kwargs) -> None:
+        self.event_rows.append((port, event, kwargs))
 
 
 @pytest.mark.parametrize(
@@ -80,6 +80,7 @@ def test_handle_telemetry_updates_latest_sample_and_logs():
                 "state": 8,
                 "fault": 9,
             },
+            {"session_id": None, "motion_run_id": None, "status_context": None},
         )
     ]
 
@@ -93,6 +94,36 @@ def test_apply_params_maps_payload_to_firmware_commands(monkeypatch: pytest.Monk
         return {"kind": "OK"}
 
     monkeypatch.setattr(transport, "_send_command", fake_send_command)
+    monkeypatch.setattr(
+        transport,
+        "_read_status",
+        lambda **kwargs: {
+            "commissioning_stage": 3,
+            "safe_mode": 0,
+            "arming_only": 0,
+            "controlled_motion": 0,
+            "enabled": 0,
+            "brake_installed": 0,
+            "collision_sensor_installed": 0,
+            "ptc_installed": 0,
+            "backup_supply_installed": 0,
+            "external_interlock_installed": 0,
+            "ignore_brake_feedback": 0,
+            "ignore_collision_sensor": 0,
+            "ignore_external_interlock": 0,
+            "allow_motion_without_calibration": 0,
+            "calib_valid": 0,
+            "calib_zero_pos": 0,
+            "calib_pitch_um": 0.0,
+            "calib_sign": 1,
+            "max_current": 0.3,
+            "max_current_peak": 0.0,
+            "max_velocity": 0.0,
+            "max_acceleration": 0.0,
+            "soft_min_pos": -100,
+            "soft_max_pos": 0,
+        },
+    )
 
     result = transport.apply_params(
         {
@@ -146,6 +177,6 @@ def test_drain_events_reads_firmware_queue_and_logs(monkeypatch: pytest.MonkeyPa
     ]
     assert transport.recent_events(limit=1) == [{"ts_ms": 200, "code": "ENABLE", "value": 1}]
     assert log_store.event_rows == [
-        ("COM_TEST", {"ts_ms": 100, "code": "BOOT", "value": 0}),
-        ("COM_TEST", {"ts_ms": 200, "code": "ENABLE", "value": 1}),
+        ("COM_TEST", {"ts_ms": 100, "code": "BOOT", "value": 0}, {"session_id": None, "motion_run_id": None}),
+        ("COM_TEST", {"ts_ms": 200, "code": "ENABLE", "value": 1}, {"session_id": None, "motion_run_id": None}),
     ]

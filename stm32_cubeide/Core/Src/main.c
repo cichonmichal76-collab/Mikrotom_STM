@@ -37,6 +37,7 @@
 #include "fw_version.h"
 #include "protocol.h"
 #include "safety_monitor.h"
+#include "compensation.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -287,6 +288,7 @@ int main(void)
     SafetyMonitor_Init();
     ConfigStore_Init();
     Calibration_Init();
+    Compensation_Init();
     AxisControl_Init();
     Protocol_Init();
 

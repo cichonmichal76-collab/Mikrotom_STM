@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import queue
 import threading
@@ -50,6 +51,19 @@ class FirmwareTransport:
         self._last_activity_monotonic = time.monotonic()
         self._log_store = log_store
 
+        self._source = os.getenv("MIKROTOM_LOG_SOURCE", "agent_api")
+        self._actor = os.getenv("MIKROTOM_LOG_ACTOR") or None
+        self._session_id: int | None = None
+        self._firmware_build_id: int | None = None
+        self._last_snapshot_id: int | None = None
+        self._last_snapshot_hash: str | None = None
+        self._last_snapshot_values: dict[str, Any] | None = None
+        self._last_status: dict[str, Any] | None = None
+        self._active_motion_run_id: int | None = None
+        self._active_fault_log_id: int | None = None
+        self._active_fault_code: str | None = None
+        self._start_session_if_needed()
+
     @staticmethod
     def _default_telemetry() -> dict[str, int]:
         return {
@@ -77,6 +91,21 @@ class FirmwareTransport:
             log_store=SQLiteLogStore.from_env(default_sqlite_path),
         )
 
+    def _start_session_if_needed(self) -> None:
+        if self._log_store is None or not hasattr(self._log_store, "start_session"):
+            return
+
+        self._session_id = self._log_store.start_session(
+            device_id=os.getenv("MIKROTOM_DEVICE_ID") or None,
+            axis_id=os.getenv("MIKROTOM_AXIS_ID") or None,
+            operator_id=os.getenv("MIKROTOM_OPERATOR_ID") or None,
+            gui_version=os.getenv("MIKROTOM_GUI_VERSION") or None,
+            agent_version=os.getenv("MIKROTOM_AGENT_VERSION", "0.1.0"),
+            hmi_version=os.getenv("MIKROTOM_HMI_VERSION") or None,
+            mode=os.getenv("MIKROTOM_SESSION_MODE", "live"),
+            notes=os.getenv("MIKROTOM_SESSION_NOTES") or None,
+        )
+
     def close(self) -> None:
         self._stop_event.set()
         with self._connect_lock:
@@ -91,7 +120,27 @@ class FirmwareTransport:
             self._reader_thread.join(timeout=0.5)
         if self._heartbeat_thread is not None and self._heartbeat_thread.is_alive():
             self._heartbeat_thread.join(timeout=0.5)
+
         if self._log_store is not None:
+            if self._active_motion_run_id is not None:
+                self._log_store.finish_motion_run(
+                    self._active_motion_run_id,
+                    end_pos_um=self._last_status.get("position_um") if self._last_status else None,
+                    final_error_um=self._compute_final_error(self._last_status),
+                    result_status="SESSION_END",
+                    result_detail="session closed before motion completed",
+                )
+                self._active_motion_run_id = None
+            if self._active_fault_log_id is not None:
+                self._log_store.close_fault_log(
+                    self._active_fault_log_id,
+                    state_at_clear="SESSION_END",
+                    source_ts_ms_clear=self._latest_telemetry.get("ts_ms"),
+                )
+                self._active_fault_log_id = None
+                self._active_fault_code = None
+            if self._session_id is not None and hasattr(self._log_store, "end_session"):
+                self._log_store.end_session(self._session_id)
             self._log_store.close()
 
     def _start_background_threads(self) -> None:
@@ -103,7 +152,9 @@ class FirmwareTransport:
             )
             self._reader_thread.start()
 
-        if self._heartbeat_interval_s > 0.0 and (self._heartbeat_thread is None or not self._heartbeat_thread.is_alive()):
+        if self._heartbeat_interval_s > 0.0 and (
+            self._heartbeat_thread is None or not self._heartbeat_thread.is_alive()
+        ):
             self._heartbeat_thread = threading.Thread(
                 target=self._heartbeat_loop,
                 name="mikrotom-firmware-heartbeat",
@@ -205,7 +256,13 @@ class FirmwareTransport:
 
         self._latest_telemetry = telemetry
         if self._log_store is not None:
-            self._log_store.log_telemetry(self._port, telemetry)
+            self._log_store.log_telemetry(
+                self._port,
+                telemetry,
+                session_id=self._session_id,
+                motion_run_id=self._active_motion_run_id,
+                status_context=self._last_status,
+            )
 
     def _clear_pending_responses(self) -> None:
         while True:
@@ -301,7 +358,13 @@ class FirmwareTransport:
 
     def _log_protocol(self, direction: str, line: str) -> None:
         if self._log_store is not None:
-            self._log_store.log_protocol(self._port, direction, line)
+            self._log_store.log_protocol(
+                self._port,
+                direction,
+                line,
+                session_id=self._session_id,
+                channel=self._port,
+            )
 
     def latest_telemetry(self) -> dict[str, int]:
         self._ensure_connected()
@@ -326,7 +389,12 @@ class FirmwareTransport:
             }
             self._events.append(normalized)
             if self._log_store is not None:
-                self._log_store.log_event(self._port, normalized)
+                self._log_store.log_event(
+                    self._port,
+                    normalized,
+                    session_id=self._session_id,
+                    motion_run_id=self._active_motion_run_id,
+                )
             drained.append(normalized)
 
         return drained
@@ -338,19 +406,176 @@ class FirmwareTransport:
             return events
         return events[-limit:]
 
+    def _ensure_firmware_build_logged(self, version: dict[str, str], status: dict[str, Any] | None = None) -> None:
+        if self._log_store is None or self._session_id is None:
+            return
+
+        build_id = self._log_store.ensure_firmware_build(
+            fw_name=str(version.get("name", "")),
+            fw_version=str(version.get("version", "")),
+            build_date=str(version.get("build_date", "")) or None,
+            git_hash=str(version.get("git_hash", "")) or None,
+            safe_integration=None if status is None else int(status.get("safe_integration", 0)),
+            motion_implemented=None if status is None else int(status.get("motion_implemented", 0)),
+        )
+        if self._firmware_build_id != build_id:
+            self._firmware_build_id = build_id
+            self._log_store.attach_firmware_build_to_session(self._session_id, build_id)
+
     def version_info(self) -> dict[str, str]:
         version = self._send_command("GET VERSION")
-        return {
+        result = {
             "name": str(version.get("name", "")),
             "version": str(version.get("version", "")),
             "build_date": str(version.get("build_date", "")),
             "git_hash": str(version.get("git_hash", "")),
         }
+        self._ensure_firmware_build_logged(result, self._last_status)
+        return result
 
-    def status(self) -> dict[str, Any]:
-        telemetry = self.latest_telemetry()
-
+    def _config_snapshot_view(self, status: dict[str, Any]) -> dict[str, Any]:
         return {
+            "commissioning_stage": status.get("commissioning_stage"),
+            "safe_mode": status.get("safe_mode"),
+            "arming_only": status.get("arming_only"),
+            "controlled_motion": status.get("controlled_motion"),
+            "enabled": status.get("enabled"),
+            "brake_installed": status.get("brake_installed"),
+            "collision_sensor_installed": status.get("collision_sensor_installed"),
+            "ptc_installed": status.get("ptc_installed"),
+            "backup_supply_installed": status.get("backup_supply_installed"),
+            "external_interlock_installed": status.get("external_interlock_installed"),
+            "ignore_brake_feedback": status.get("ignore_brake_feedback"),
+            "ignore_collision_sensor": status.get("ignore_collision_sensor"),
+            "ignore_external_interlock": status.get("ignore_external_interlock"),
+            "allow_motion_without_calibration": status.get("allow_motion_without_calibration"),
+            "calib_valid": status.get("calib_valid"),
+            "calib_zero_pos": status.get("calib_zero_pos"),
+            "calib_pitch_um": status.get("calib_pitch_um"),
+            "calib_sign": status.get("calib_sign"),
+            "max_current": status.get("max_current"),
+            "max_current_peak": status.get("max_current_peak"),
+            "max_velocity": status.get("max_velocity"),
+            "max_acceleration": status.get("max_acceleration"),
+            "soft_min_pos": status.get("soft_min_pos"),
+            "soft_max_pos": status.get("soft_max_pos"),
+        }
+
+    def _track_status_snapshot(
+        self,
+        status: dict[str, Any],
+        *,
+        source: str,
+        command_id: int | None = None,
+    ) -> int | None:
+        if self._log_store is None or self._session_id is None:
+            return None
+
+        snapshot_view = self._config_snapshot_view(status)
+        snapshot_hash = self._log_store.snapshot_hash(snapshot_view)
+        if snapshot_hash == self._last_snapshot_hash:
+            return self._last_snapshot_id
+
+        snapshot_id, stored_hash = self._log_store.log_config_snapshot(
+            self._session_id,
+            source,
+            snapshot_view,
+        )
+        if self._last_snapshot_values is not None:
+            for key, new_value in snapshot_view.items():
+                old_value = self._last_snapshot_values.get(key)
+                if old_value != new_value:
+                    self._log_store.log_config_change(
+                        self._session_id,
+                        source=source,
+                        actor=self._actor,
+                        parameter_name=key,
+                        old_value=old_value,
+                        new_value=new_value,
+                        command_id=command_id,
+                        snapshot_id_after=snapshot_id,
+                    )
+
+        self._last_snapshot_id = snapshot_id
+        self._last_snapshot_hash = stored_hash
+        self._last_snapshot_values = dict(snapshot_view)
+        return snapshot_id
+
+    def _current_fault_active(self, status: dict[str, Any]) -> bool:
+        return str(status.get("fault", "NONE")) not in {"", "0", "NONE"}
+
+    def _sync_fault_log(self, status: dict[str, Any], *, command_id: int | None = None) -> None:
+        if self._log_store is None or self._session_id is None:
+            return
+
+        current_fault = str(status.get("fault", "NONE"))
+        if self._current_fault_active(status):
+            if self._active_fault_log_id is None:
+                self._active_fault_log_id = self._log_store.open_fault_log(
+                    session_id=self._session_id,
+                    motion_run_id=self._active_motion_run_id,
+                    fault_code=current_fault,
+                    fault_mask=int(status.get("fault_mask", 0)),
+                    state_at_set=str(status.get("axis_state", "")),
+                    source_ts_ms_start=self._latest_telemetry.get("ts_ms"),
+                )
+                self._active_fault_code = current_fault
+            elif self._active_fault_code != current_fault:
+                self._log_store.close_fault_log(
+                    self._active_fault_log_id,
+                    state_at_clear=str(status.get("axis_state", "")),
+                    source_ts_ms_clear=self._latest_telemetry.get("ts_ms"),
+                )
+                self._active_fault_log_id = self._log_store.open_fault_log(
+                    session_id=self._session_id,
+                    motion_run_id=self._active_motion_run_id,
+                    fault_code=current_fault,
+                    fault_mask=int(status.get("fault_mask", 0)),
+                    state_at_set=str(status.get("axis_state", "")),
+                    source_ts_ms_start=self._latest_telemetry.get("ts_ms"),
+                )
+                self._active_fault_code = current_fault
+        elif self._active_fault_log_id is not None:
+            self._log_store.close_fault_log(
+                self._active_fault_log_id,
+                state_at_clear=str(status.get("axis_state", "")),
+                ack_command_id=command_id,
+                source_ts_ms_clear=self._latest_telemetry.get("ts_ms"),
+            )
+            self._active_fault_log_id = None
+            self._active_fault_code = None
+
+    @staticmethod
+    def _compute_final_error(status: dict[str, Any] | None) -> int | None:
+        if status is None:
+            return None
+        try:
+            return int(status["position_um"]) - int(status["position_set_um"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def _sync_motion_run(self, status: dict[str, Any], *, command_id: int | None = None) -> None:
+        if self._log_store is None or self._active_motion_run_id is None:
+            return
+
+        if str(status.get("axis_state", "")) == "MOTION":
+            return
+
+        result_status = "FAULT" if self._current_fault_active(status) else str(status.get("axis_state", "UNKNOWN"))
+        result_detail = None if not self._current_fault_active(status) else str(status.get("fault"))
+        self._log_store.finish_motion_run(
+            self._active_motion_run_id,
+            stop_command_id=command_id,
+            end_pos_um=int(status.get("position_um", 0)),
+            final_error_um=self._compute_final_error(status),
+            result_status=result_status,
+            result_detail=result_detail,
+        )
+        self._active_motion_run_id = None
+
+    def _read_status(self, *, source: str = "status_poll", command_id: int | None = None) -> dict[str, Any]:
+        telemetry = self.latest_telemetry()
+        status = {
             "axis_state": self._send_command("GET STATE")["value"],
             "fault": self._send_command("GET FAULT")["value"],
             "fault_mask": int(self._read_param_value("FAULT_MASK")),
@@ -391,6 +616,17 @@ class FirmwareTransport:
             "calib_sign": int(self._read_param("CALIB_SIGN")),
         }
 
+        self._last_status = status
+        if self._firmware_build_id is None:
+            self._ensure_firmware_build_logged(self.version_info(), status)
+        self._track_status_snapshot(status, source=source, command_id=command_id)
+        self._sync_fault_log(status, command_id=command_id)
+        self._sync_motion_run(status, command_id=command_id)
+        return status
+
+    def status(self) -> dict[str, Any]:
+        return self._read_status()
+
     def debug_vars(self) -> dict[str, Any]:
         status = self.status()
         telemetry = self.latest_telemetry()
@@ -407,6 +643,9 @@ class FirmwareTransport:
                 "connected": self._serial is not None,
                 "seconds_since_activity": round(time.monotonic() - self._last_activity_monotonic, 3),
                 "event_cache_depth": len(self._events),
+                "session_id": self._session_id,
+                "active_motion_run_id": self._active_motion_run_id,
+                "active_fault_log_id": self._active_fault_log_id,
             },
             "firmware_version": self.version_info(),
             "status": status,
@@ -420,8 +659,117 @@ class FirmwareTransport:
             },
         }
 
+    @staticmethod
+    def _parse_user_command(line: str) -> dict[str, Any]:
+        tokens = line.strip().split()
+        metadata: dict[str, Any] = {
+            "command_type": "RAW",
+            "arg_target_um": None,
+            "arg_delta_um": None,
+            "arg_value_text": None,
+        }
+        if len(tokens) >= 2 and tokens[0] == "CMD":
+            metadata["command_type"] = tokens[1]
+            if tokens[1] == "MOVE_REL" and len(tokens) >= 3:
+                metadata["arg_delta_um"] = int(tokens[2])
+            elif tokens[1] == "MOVE_ABS" and len(tokens) >= 3:
+                metadata["arg_target_um"] = int(tokens[2])
+            elif len(tokens) >= 3:
+                metadata["arg_value_text"] = " ".join(tokens[2:])
+        elif len(tokens) >= 3 and tokens[0] == "SET":
+            metadata["command_type"] = f"{tokens[0]}_{tokens[1]}"
+            metadata["arg_value_text"] = " ".join(tokens[2:])
+        elif len(tokens) >= 1 and tokens[0] == "GET":
+            metadata["command_type"] = "GET"
+            metadata["arg_value_text"] = " ".join(tokens[1:])
+        return metadata
+
+    def _log_user_command(
+        self,
+        line: str,
+        *,
+        response_ok: bool,
+        response_text: str,
+        latency_ms: int,
+        motion_run_id: int | None = None,
+    ) -> int | None:
+        if self._log_store is None:
+            return None
+        metadata = self._parse_user_command(line)
+        return self._log_store.log_command(
+            session_id=self._session_id,
+            source=self._source,
+            actor=self._actor,
+            command_type=str(metadata["command_type"]),
+            raw_command=line,
+            arg_target_um=metadata["arg_target_um"],
+            arg_delta_um=metadata["arg_delta_um"],
+            arg_value_text=metadata["arg_value_text"],
+            response_ok=response_ok,
+            response_text=response_text,
+            latency_ms=latency_ms,
+            motion_run_id=motion_run_id,
+        )
+
+    def _maybe_start_motion_run(
+        self,
+        line: str,
+        *,
+        command_id: int | None,
+        status_after: dict[str, Any],
+    ) -> None:
+        if self._log_store is None or self._session_id is None:
+            return
+
+        metadata = self._parse_user_command(line)
+        move_type = str(metadata["command_type"])
+        if move_type not in {"MOVE_REL", "MOVE_ABS"}:
+            return
+
+        if self._active_motion_run_id is not None:
+            self._log_store.finish_motion_run(
+                self._active_motion_run_id,
+                stop_command_id=command_id,
+                end_pos_um=int(status_after.get("position_um", 0)),
+                final_error_um=self._compute_final_error(status_after),
+                result_status="INTERRUPTED",
+                result_detail="new move command started before previous motion closed",
+            )
+
+        self._active_motion_run_id = self._log_store.start_motion_run(
+            session_id=self._session_id,
+            source=self._source,
+            start_command_id=command_id,
+            config_snapshot_id=self._last_snapshot_id,
+            move_type=move_type,
+            requested_target_um=metadata["arg_target_um"],
+            compensated_target_um=metadata["arg_target_um"],
+            start_pos_um=int(status_after.get("position_um", 0)),
+        )
+
     def send_ok_command(self, line: str) -> dict[str, bool | str]:
-        self._send_command(line)
+        started = time.monotonic()
+        try:
+            self._send_command(line)
+        except FirmwareError as exc:
+            latency_ms = int(round((time.monotonic() - started) * 1000.0))
+            self._log_user_command(
+                line,
+                response_ok=False,
+                response_text=str(exc),
+                latency_ms=latency_ms,
+            )
+            raise
+
+        latency_ms = int(round((time.monotonic() - started) * 1000.0))
+        command_id = self._log_user_command(
+            line,
+            response_ok=True,
+            response_text="OK",
+            latency_ms=latency_ms,
+        )
+        status_after = self._read_status(source="command", command_id=command_id)
+        self._maybe_start_motion_run(line, command_id=command_id, status_after=status_after)
         return {"ok": True, "command": line}
 
     def apply_params(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -453,14 +801,45 @@ class FirmwareTransport:
         if "calib_valid" in payload and payload["calib_valid"] is not None:
             raise FirmwareError("calib_valid is read-only")
 
+        effective_payload = {key: value for key, value in payload.items() if value is not None}
         issued: list[str] = []
-        for key, value in payload.items():
-            if value is None:
-                continue
-            if key not in command_map:
-                raise FirmwareError(f"unsupported parameter: {key}")
-            line = command_map[key](value)
-            self._send_command(line)
-            issued.append(line)
+        started = time.monotonic()
+        try:
+            for key, value in effective_payload.items():
+                if key not in command_map:
+                    raise FirmwareError(f"unsupported parameter: {key}")
+                line = command_map[key](value)
+                self._send_command(line)
+                issued.append(line)
+        except FirmwareError as exc:
+            latency_ms = int(round((time.monotonic() - started) * 1000.0))
+            if self._log_store is not None:
+                self._log_store.log_command(
+                    session_id=self._session_id,
+                    source=self._source,
+                    actor=self._actor,
+                    command_type="APPLY_PARAMS",
+                    raw_command=json.dumps(effective_payload, sort_keys=True),
+                    arg_value_text="; ".join(issued),
+                    response_ok=False,
+                    response_text=str(exc),
+                    latency_ms=latency_ms,
+                )
+            raise
 
+        latency_ms = int(round((time.monotonic() - started) * 1000.0))
+        command_id = None
+        if self._log_store is not None:
+            command_id = self._log_store.log_command(
+                session_id=self._session_id,
+                source=self._source,
+                actor=self._actor,
+                command_type="APPLY_PARAMS",
+                raw_command=json.dumps(effective_payload, sort_keys=True),
+                arg_value_text="; ".join(issued),
+                response_ok=True,
+                response_text="OK",
+                latency_ms=latency_ms,
+            )
+        self._read_status(source="apply_params", command_id=command_id)
         return {"ok": True, "commands": issued}

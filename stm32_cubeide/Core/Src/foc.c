@@ -10,6 +10,7 @@
  */
 
 #include "foc.h"
+#include "compensation.h"
 
 
 void FOC_Init (FieldOrientedControl *f, TIM_HandleTypeDef *t){
@@ -238,7 +239,8 @@ void FOC_VelocityRegulation(
 	    //IIR filter do usuniecia wyzszych harmonicznych ze względu na hałas,
 		//ale generalnie najlepiej jakby go nie używać.
 		float setCurrentIq = pi_control(vel_pid, f->vel_ms_err);
-	    f->iq_ref = f->current_IIR_alfa * setCurrentIq + (1-f->current_IIR_alfa) * f->iq_ref;
+		float baseIqRef = f->current_IIR_alfa * setCurrentIq + (1-f->current_IIR_alfa) * f->iq_ref;
+	    f->iq_ref = Compensation_AdjustIqReference(baseIqRef, s);
 		f->id_ref = 0.0;
 	}
 
@@ -263,7 +265,7 @@ void FOC_PositionRegulation(
 
 		//Zdecydować sie czy trajektoria czy wartość zadana
 		f->pos_m_err = t->pos_set_m - s->pos_m;	//Policzenie błędu położenia zadanej trajektorii i aktualnej
-		f->vel_ref = pi_control(pos_pid, f->pos_m_err);
+		f->vel_ref = Compensation_AdjustVelocityReference(pi_control(pos_pid, f->pos_m_err), s, t);
 	}
 
 	FOC_VelocityRegulation(f, s, vd_pid, vq_pid, vel_pid);

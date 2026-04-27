@@ -10,6 +10,7 @@
 #include "trajectory.h"
 #include "app_build_config.h"
 #include "safety_monitor.h"
+#include "compensation.h"
 #include <math.h>
 
 extern volatile MotorState state;
@@ -29,6 +30,20 @@ static void axis_first_move_reset(void)
     g_first_move_test_active = 0u;
     g_first_move_target_um = (int32_t)state.pos_um;
     g_first_move_settle_ticks = 0u;
+}
+
+static void axis_control_hold_position(uint8_t disable_axis)
+{
+    traj.traj_done = 1;
+    traj.dest_pos_m = state.pos_m;
+    traj.pos_set_m = state.pos_m;
+    traj.vel_set_m_s = 0.0f;
+
+    if (disable_axis)
+        state.enabled = 0u;
+
+    state.pos_set_m = state.pos_m;
+    state.vel_set_m_s = 0.0f;
 }
 
 #if APP_MOTION_IMPLEMENTED
@@ -58,9 +73,18 @@ static float axis_control_compute_move_time_s(float distance_m)
 
 static uint8_t axis_control_start_move_um(int32_t target_um)
 {
+    int32_t current_pos_um = (int32_t)state.pos_um;
     float target_m = ((float)target_um) * 1e-6f;
     float distance_m = target_m - state.pos_m;
     float move_time_s;
+
+    target_um = Compensation_AdjustTargetUm(target_um, current_pos_um);
+    if (!Limits_IsMoveAbsAllowed(target_um))
+        return 0u;
+
+    target_um = Limits_ClampPositionUm(target_um);
+    target_m = ((float)target_um) * 1e-6f;
+    distance_m = target_m - state.pos_m;
 
     if (fabsf(distance_m) <= 0.5e-6f)
     {
@@ -190,13 +214,7 @@ uint8_t AxisControl_Disable(void)
 uint8_t AxisControl_Stop(void)
 {
     axis_first_move_reset();
-    traj.traj_done = 1;
-    traj.dest_pos_m = state.pos_m;
-    traj.pos_set_m = state.pos_m;
-    traj.vel_set_m_s = 0.0f;
-    state.enabled = 0u;
-    state.pos_set_m = state.pos_m;
-    state.vel_set_m_s = 0.0f;
+    axis_control_hold_position(1u);
     AxisState_Set(AXIS_STOPPING);
     EventLog_Push(EVT_STOP, 0);
     return 1u;
@@ -205,13 +223,7 @@ uint8_t AxisControl_Stop(void)
 uint8_t AxisControl_QStop(void)
 {
     axis_first_move_reset();
-    traj.traj_done = 1;
-    traj.dest_pos_m = state.pos_m;
-    traj.pos_set_m = state.pos_m;
-    traj.vel_set_m_s = 0.0f;
-    state.enabled = 0u;
-    state.pos_set_m = state.pos_m;
-    state.vel_set_m_s = 0.0f;
+    axis_control_hold_position(1u);
     AxisState_Set(AXIS_SAFE);
     EventLog_Push(EVT_QSTOP, 0);
     return 1u;
@@ -312,13 +324,7 @@ void AxisControl_UpdateRt(void)
     if (Fault_IsActive())
     {
         axis_first_move_reset();
-        state.enabled = 0u;
-        traj.traj_done = 1;
-        traj.dest_pos_m = state.pos_m;
-        traj.pos_set_m = state.pos_m;
-        traj.vel_set_m_s = 0.0f;
-        state.pos_set_m = state.pos_m;
-        state.vel_set_m_s = 0.0f;
+        axis_control_hold_position(1u);
         AxisState_Set(AXIS_FAULT);
         return;
     }
@@ -366,12 +372,7 @@ void AxisControl_UpdateRt(void)
 
     if (!AxisControl_RunAllowed())
     {
-        traj.traj_done = 1;
-        traj.dest_pos_m = state.pos_m;
-        traj.pos_set_m = state.pos_m;
-        traj.vel_set_m_s = 0.0f;
-        state.pos_set_m = state.pos_m;
-        state.vel_set_m_s = 0.0f;
+        axis_control_hold_position(0u);
         return;
     }
 

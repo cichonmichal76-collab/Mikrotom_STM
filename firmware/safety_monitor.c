@@ -17,7 +17,7 @@
 #endif
 
 #ifndef SAFETY_VBUS_MAX_V
-#define SAFETY_VBUS_MAX_V 30.0f
+#define SAFETY_VBUS_MAX_V 25.2f
 #endif
 
 static uint32_t g_overcurrent_samples;

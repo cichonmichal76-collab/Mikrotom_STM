@@ -45,6 +45,7 @@ The agent also persists MCU-facing logs to SQLite:
 - protocol TX/RX lines
 - telemetry samples
 - event log entries
+- decoded binary snapshots (`runtime`, `limits`, `safety`, `calibration`, `version`)
 
 `/api/status` also surfaces the new program metadata needed by the GUI:
 
@@ -65,6 +66,14 @@ The agent also persists MCU-facing logs to SQLite:
 - `MIKROTOM_HEARTBEAT_INTERVAL_S` default: `0.35`
 - `MIKROTOM_EVENT_CACHE_SIZE` default: `128`
 - `MIKROTOM_SQLITE_PATH` default: `agent/mikrotom_agent.sqlite3`
+- `MIKROTOM_PROTOCOL_MODE` default: `auto`
+
+`MIKROTOM_PROTOCOL_MODE` supports:
+
+- `ascii`: force legacy `ASCII v1`
+- `binary`: use `UART binary v2` for supported `CMD ...` traffic and heartbeat
+- `auto`: stay on `ASCII v1` until the agent sees a valid binary frame from MCU,
+  then switch supported commands and heartbeat to `v2`
 
 Set `MIKROTOM_SQLITE_PATH=off` to disable persistent logging.
 

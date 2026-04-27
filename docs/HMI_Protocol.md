@@ -17,6 +17,9 @@ This specification applies to:
 - development proxy mode `HMI <-> PC agent <-> STM32`
 - service tools that need the same command grammar
 
+For the proposed binary PC logging / algorithm transport, see
+[UART_Binary_Protocol_v2.md](/C:/Users/cicho/OneDrive/Pulpit/Mikrotom_STM/docs/UART_Binary_Protocol_v2.md).
+
 The protocol is intentionally aligned with the existing STM32 firmware command
 set.
 

@@ -32,6 +32,19 @@
 #endif
 
 /*
+ * Binary UART protocol v2 is introduced as an optional transport. Keep the
+ * existing ASCII protocol as the default until the PC agent supports the new
+ * framing end-to-end.
+ */
+#ifndef APP_PROTOCOL_BINARY_V2
+#define APP_PROTOCOL_BINARY_V2 0
+#endif
+
+#ifndef APP_PROTOCOL_BINARY_V2_TELEMETRY
+#define APP_PROTOCOL_BINARY_V2_TELEMETRY APP_PROTOCOL_BINARY_V2
+#endif
+
+/*
  * Current bring-up assumption: communication and command acceptance are
  * considered validated enough to shift diagnostics toward the execution path
  * (encoder/current/FOC/phase order). These flags do not change motion logic by

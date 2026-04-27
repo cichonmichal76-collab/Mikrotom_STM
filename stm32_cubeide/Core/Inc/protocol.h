@@ -4,6 +4,8 @@
 void Protocol_Init(void);
 void Protocol_Process(void);
 void Protocol_RxCpltCallback(uint8_t byte);
+void Protocol_RxErrorCallback(void);
+void Protocol_EnsureRxActive(void);
 void Protocol_SendLine(const char *line);
 uint8_t Protocol_GetLastRxByte(void);
 #endif

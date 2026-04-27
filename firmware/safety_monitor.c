@@ -91,7 +91,12 @@ uint8_t SafetyMonitor_UpdateRt(const volatile MotorState *s,
     vbus_known = s->Vbus_valid ? 1u : 0u;
     undervoltage = (vbus_known && (s->Vbus < SAFETY_VBUS_MIN_V)) ? 1u : 0u;
     overvoltage = (vbus_known && (s->Vbus > SAFETY_VBUS_MAX_V)) ? 1u : 0u;
-    inhibit_outputs = (!vbus_known || overcurrent || undervoltage || overvoltage) ? 1u : 0u;
+    /*
+     * VBUS faults inhibit outputs immediately. Overcurrent is debounced below,
+     * so a single noisy current sample does not silently cancel a commanded move
+     * without latching FAULT_OVERCURRENT.
+     */
+    inhibit_outputs = (!vbus_known || undervoltage || overvoltage) ? 1u : 0u;
 
     safety_debounce_fault(overcurrent, &g_overcurrent_samples,
                           SAFETY_OVERCURRENT_SAMPLES, FAULT_OVERCURRENT);
@@ -102,6 +107,7 @@ uint8_t SafetyMonitor_UpdateRt(const volatile MotorState *s,
 
     if (!homing_active)
     {
+        AxisState_t axis_state = AxisState_Get();
         int32_t pos_um = (int32_t)s->pos_um;
         uint8_t outside_soft_limits;
         uint8_t overspeed;
@@ -113,12 +119,20 @@ uint8_t SafetyMonitor_UpdateRt(const volatile MotorState *s,
         if (s->HomingSuccessful && outside_soft_limits)
             Fault_Set(FAULT_TRACKING);
 
-        overspeed = (fabsf(s->vel_m_s) > (limits->max_velocity_m_s * SAFETY_OVERSPEED_FACTOR)) ? 1u : 0u;
+        /*
+         * Speed supervision is meaningful only while firmware is actively
+         * commanding motion. During SAFE/ARMED startup the first encoder
+         * sample may legitimately synchronize from an arbitrary counter
+         * value and must not latch a false OVERSPEED fault.
+         */
+        overspeed =
+            ((axis_state == AXIS_MOTION) &&
+             (fabsf(s->vel_m_s) > (limits->max_velocity_m_s * SAFETY_OVERSPEED_FACTOR))) ? 1u : 0u;
         safety_debounce_fault(overspeed, &g_overspeed_samples,
                               SAFETY_OVERSPEED_SAMPLES, FAULT_OVERSPEED);
 
         tracking_error =
-            ((AxisState_Get() == AXIS_MOTION) &&
+            ((axis_state == AXIS_MOTION) &&
              (fabsf(t->pos_set_m - s->pos_m) > SAFETY_TRACKING_ERROR_M)) ? 1u : 0u;
         safety_debounce_fault(tracking_error, &g_tracking_samples,
                               SAFETY_TRACKING_SAMPLES, FAULT_TRACKING);

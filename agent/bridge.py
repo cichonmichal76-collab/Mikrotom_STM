@@ -38,7 +38,7 @@ class FirmwareTransport:
         self._read_timeout_s = read_timeout_s
         self._command_timeout_s = command_timeout_s
         self._heartbeat_interval_s = heartbeat_interval_s
-        self._command_lock = threading.Lock()
+        self._command_lock = threading.RLock()
         self._connect_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._reader_thread: threading.Thread | None = None
@@ -229,7 +229,7 @@ class FirmwareTransport:
 
         self._log_protocol("tx", line)
 
-    def _send_command(self, line: str) -> dict[str, Any]:
+    def _send_command(self, line: str, expected=None) -> dict[str, Any]:
         with self._command_lock:
             self._last_activity_monotonic = time.monotonic()
             self._clear_pending_responses()
@@ -243,7 +243,9 @@ class FirmwareTransport:
                 except queue.Empty:
                     continue
                 self._last_activity_monotonic = time.monotonic()
-                return self._parse_response(response)
+                parsed = self._parse_response(response)
+                if expected is None or expected(parsed):
+                    return parsed
 
         raise FirmwareError(f"timeout waiting for response to: {line}")
 
@@ -291,13 +293,35 @@ class FirmwareTransport:
         raise FirmwareError(f"unsupported response: {line}")
 
     def _read_param_value(self, name: str) -> str:
-        return str(self._send_command(f"GET {name}")["value"])
+        response = self._send_command(
+            f"GET {name}",
+            expected=lambda rsp: (
+                (name == "STATE" and rsp.get("kind") == "STATE") or
+                (name == "FAULT" and rsp.get("kind") == "FAULT") or
+                (rsp.get("kind") in {"PARAM", "CONFIG"} and rsp.get("name") == name)
+            ),
+        )
+        return str(response["value"])
+
+    def _read_param_value_default(self, name: str, default: str) -> str:
+        try:
+            return self._read_param_value(name)
+        except FirmwareError:
+            return default
 
     def _read_param(self, name: str) -> str:
-        return str(self._send_command(f"GET PARAM {name}")["value"])
+        response = self._send_command(
+            f"GET PARAM {name}",
+            expected=lambda rsp: rsp.get("kind") == "PARAM" and rsp.get("name") == name,
+        )
+        return str(response["value"])
 
     def _read_config(self, name: str) -> str:
-        return str(self._send_command(f"GET CONFIG {name}")["value"])
+        response = self._send_command(
+            f"GET CONFIG {name}",
+            expected=lambda rsp: rsp.get("kind") == "CONFIG" and rsp.get("name") == name,
+        )
+        return str(response["value"])
 
     def _log_protocol(self, direction: str, line: str) -> None:
         if self._log_store is not None:
@@ -308,28 +332,32 @@ class FirmwareTransport:
         return dict(self._latest_telemetry)
 
     def drain_events(self, max_events: int = 64) -> list[dict[str, int | str]]:
-        drained: list[dict[str, int | str]] = []
+        with self._command_lock:
+            drained: list[dict[str, int | str]] = []
 
-        try:
-            count = int(self._read_param_value("EVENT_COUNT"))
-        except (ValueError, FirmwareError):
+            try:
+                count = int(self._read_param_value("EVENT_COUNT"))
+            except (ValueError, FirmwareError):
+                return drained
+
+            for _ in range(min(count, max_events)):
+                event = self._send_command(
+                    "GET EVENT_POP",
+                    expected=lambda rsp: rsp.get("kind") == "EVENT",
+                )
+                if event.get("empty"):
+                    break
+                normalized = {
+                    "ts_ms": int(event["ts_ms"]),
+                    "code": str(event["code"]),
+                    "value": int(event["value"]),
+                }
+                self._events.append(normalized)
+                if self._log_store is not None:
+                    self._log_store.log_event(self._port, normalized)
+                drained.append(normalized)
+
             return drained
-
-        for _ in range(min(count, max_events)):
-            event = self._send_command("GET EVENT_POP")
-            if event.get("empty"):
-                break
-            normalized = {
-                "ts_ms": int(event["ts_ms"]),
-                "code": str(event["code"]),
-                "value": int(event["value"]),
-            }
-            self._events.append(normalized)
-            if self._log_store is not None:
-                self._log_store.log_event(self._port, normalized)
-            drained.append(normalized)
-
-        return drained
 
     def recent_events(self, limit: int = 24) -> list[dict[str, int | str]]:
         self.drain_events()
@@ -339,90 +367,106 @@ class FirmwareTransport:
         return events[-limit:]
 
     def version_info(self) -> dict[str, str]:
-        version = self._send_command("GET VERSION")
-        return {
-            "name": str(version.get("name", "")),
-            "version": str(version.get("version", "")),
-            "build_date": str(version.get("build_date", "")),
-            "git_hash": str(version.get("git_hash", "")),
-        }
+        with self._command_lock:
+            version = self._send_command(
+                "GET VERSION",
+                expected=lambda rsp: rsp.get("kind") == "VERSION",
+            )
+            return {
+                "name": str(version.get("name", "")),
+                "version": str(version.get("version", "")),
+                "build_date": str(version.get("build_date", "")),
+                "git_hash": str(version.get("git_hash", "")),
+            }
 
     def status(self) -> dict[str, Any]:
-        telemetry = self.latest_telemetry()
+        with self._command_lock:
+            telemetry = self.latest_telemetry()
 
-        return {
-            "axis_state": self._send_command("GET STATE")["value"],
-            "fault": self._send_command("GET FAULT")["value"],
-            "fault_mask": int(self._read_param_value("FAULT_MASK")),
-            "commissioning_stage": int(self._read_param_value("COMMISSION_STAGE")),
-            "safe_mode": int(self._read_param_value("SAFE_MODE")),
-            "arming_only": int(self._read_param_value("ARMING_ONLY")),
-            "controlled_motion": int(self._read_param_value("CONTROLLED_MOTION")),
-            "run_allowed": int(self._read_param_value("RUN_ALLOWED")),
-            "enabled": int(self._read_param_value("ENABLED")),
-            "homing_started": int(self._read_param_value("HOMING_STARTED")),
-            "homing_successful": int(self._read_param_value("HOMING_SUCCESSFUL")),
-            "homing_ongoing": int(self._read_param_value("HOMING_ONGOING")),
-            "config_loaded": int(self._read_param_value("CONFIG_LOADED")),
-            "safe_integration": int(self._read_param_value("SAFE_INTEGRATION")),
-            "motion_implemented": int(self._read_param_value("MOTION_IMPLEMENTED")),
-            "position_um": int(self._read_param_value("POS")),
-            "vbus_V": float(self._read_param_value("VBUS")),
-            "vbus_valid": int(self._read_param_value("VBUS_VALID")),
-            "position_set_um": int(telemetry["pos_set_um"]),
-            "brake_installed": int(self._read_config("BRAKE_INSTALLED")),
-            "collision_sensor_installed": int(self._read_config("COLLISION_SENSOR_INSTALLED")),
-            "ptc_installed": int(self._read_config("PTC_INSTALLED")),
-            "backup_supply_installed": int(self._read_config("BACKUP_SUPPLY_INSTALLED")),
-            "external_interlock_installed": int(self._read_config("EXTERNAL_INTERLOCK_INSTALLED")),
-            "ignore_brake_feedback": int(self._read_config("IGNORE_BRAKE_FEEDBACK")),
-            "ignore_collision_sensor": int(self._read_config("IGNORE_COLLISION_SENSOR")),
-            "ignore_external_interlock": int(self._read_config("IGNORE_EXTERNAL_INTERLOCK")),
-            "allow_motion_without_calibration": int(self._read_config("ALLOW_MOTION_WITHOUT_CALIBRATION")),
-            "calib_valid": int(self._read_config("CALIB_VALID")),
-            "max_current": float(self._read_param("MAX_CURRENT")),
-            "max_current_peak": float(self._read_param("MAX_CURRENT_PEAK")),
-            "max_velocity": float(self._read_param("MAX_VELOCITY")),
-            "max_acceleration": float(self._read_param("MAX_ACCELERATION")),
-            "soft_min_pos": int(self._read_param("SOFT_MIN_POS")),
-            "soft_max_pos": int(self._read_param("SOFT_MAX_POS")),
-            "calib_zero_pos": int(self._read_param("CALIB_ZERO_POS")),
-            "calib_pitch_um": float(self._read_param("CALIB_PITCH_UM")),
-            "calib_sign": int(self._read_param("CALIB_SIGN")),
-        }
+            return {
+                "axis_state": self._send_command(
+                    "GET STATE",
+                    expected=lambda rsp: rsp.get("kind") == "STATE",
+                )["value"],
+                "fault": self._send_command(
+                    "GET FAULT",
+                    expected=lambda rsp: rsp.get("kind") == "FAULT",
+                )["value"],
+                "fault_mask": int(self._read_param_value("FAULT_MASK")),
+                "commissioning_stage": int(self._read_param_value("COMMISSION_STAGE")),
+                "safe_mode": int(self._read_param_value("SAFE_MODE")),
+                "arming_only": int(self._read_param_value("ARMING_ONLY")),
+                "controlled_motion": int(self._read_param_value("CONTROLLED_MOTION")),
+                "run_allowed": int(self._read_param_value("RUN_ALLOWED")),
+                "enabled": int(self._read_param_value("ENABLED")),
+                "homing_started": int(self._read_param_value("HOMING_STARTED")),
+                "homing_successful": int(self._read_param_value("HOMING_SUCCESSFUL")),
+                "homing_ongoing": int(self._read_param_value("HOMING_ONGOING")),
+                "first_move_test_active": int(self._read_param_value_default("FIRST_MOVE_TEST_ACTIVE", "0")),
+                "first_move_max_delta_um": int(self._read_param_value_default("FIRST_MOVE_MAX_DELTA", "100")),
+                "telemetry_enabled": int(self._read_param_value_default("TELEMETRY_ENABLED", "1")),
+                "config_loaded": int(self._read_param_value("CONFIG_LOADED")),
+                "safe_integration": int(self._read_param_value("SAFE_INTEGRATION")),
+                "motion_implemented": int(self._read_param_value("MOTION_IMPLEMENTED")),
+                "position_um": int(self._read_param_value("POS")),
+                "vbus_V": float(self._read_param_value("VBUS")),
+                "vbus_valid": int(self._read_param_value("VBUS_VALID")),
+                "position_set_um": int(telemetry["pos_set_um"]),
+                "brake_installed": int(self._read_config("BRAKE_INSTALLED")),
+                "collision_sensor_installed": int(self._read_config("COLLISION_SENSOR_INSTALLED")),
+                "ptc_installed": int(self._read_config("PTC_INSTALLED")),
+                "backup_supply_installed": int(self._read_config("BACKUP_SUPPLY_INSTALLED")),
+                "external_interlock_installed": int(self._read_config("EXTERNAL_INTERLOCK_INSTALLED")),
+                "ignore_brake_feedback": int(self._read_config("IGNORE_BRAKE_FEEDBACK")),
+                "ignore_collision_sensor": int(self._read_config("IGNORE_COLLISION_SENSOR")),
+                "ignore_external_interlock": int(self._read_config("IGNORE_EXTERNAL_INTERLOCK")),
+                "allow_motion_without_calibration": int(self._read_config("ALLOW_MOTION_WITHOUT_CALIBRATION")),
+                "calib_valid": int(self._read_config("CALIB_VALID")),
+                "max_current": float(self._read_param("MAX_CURRENT")),
+                "max_current_peak": float(self._read_param("MAX_CURRENT_PEAK")),
+                "max_velocity": float(self._read_param("MAX_VELOCITY")),
+                "max_acceleration": float(self._read_param("MAX_ACCELERATION")),
+                "soft_min_pos": int(self._read_param("SOFT_MIN_POS")),
+                "soft_max_pos": int(self._read_param("SOFT_MAX_POS")),
+                "calib_zero_pos": int(self._read_param("CALIB_ZERO_POS")),
+                "calib_pitch_um": float(self._read_param("CALIB_PITCH_UM")),
+                "calib_sign": int(self._read_param("CALIB_SIGN")),
+            }
 
     def debug_vars(self) -> dict[str, Any]:
-        status = self.status()
-        telemetry = self.latest_telemetry()
-        events = self.recent_events(limit=16)
+        with self._command_lock:
+            status = self.status()
+            telemetry = self.latest_telemetry()
+            events = self.recent_events(limit=16)
 
-        return {
-            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-            "transport": {
-                "port": self._port,
-                "baudrate": self._baudrate,
-                "read_timeout_s": self._read_timeout_s,
-                "command_timeout_s": self._command_timeout_s,
-                "heartbeat_interval_s": self._heartbeat_interval_s,
-                "connected": self._serial is not None,
-                "seconds_since_activity": round(time.monotonic() - self._last_activity_monotonic, 3),
-                "event_cache_depth": len(self._events),
-            },
-            "firmware_version": self.version_info(),
-            "status": status,
-            "telemetry": telemetry,
-            "events_recent": events,
-            "log_store": self._log_store.stats() if self._log_store is not None else {"enabled": False},
-            "protocol_exports": {
-                "status_fields": sorted(status.keys()),
-                "telemetry_fields": sorted(telemetry.keys()),
-                "event_fields": ["ts_ms", "code", "value"],
-            },
-        }
+            return {
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "transport": {
+                    "port": self._port,
+                    "baudrate": self._baudrate,
+                    "read_timeout_s": self._read_timeout_s,
+                    "command_timeout_s": self._command_timeout_s,
+                    "heartbeat_interval_s": self._heartbeat_interval_s,
+                    "connected": self._serial is not None,
+                    "seconds_since_activity": round(time.monotonic() - self._last_activity_monotonic, 3),
+                    "event_cache_depth": len(self._events),
+                },
+                "firmware_version": self.version_info(),
+                "status": status,
+                "telemetry": telemetry,
+                "events_recent": events,
+                "log_store": self._log_store.stats() if self._log_store is not None else {"enabled": False},
+                "protocol_exports": {
+                    "status_fields": sorted(status.keys()),
+                    "telemetry_fields": sorted(telemetry.keys()),
+                    "event_fields": ["ts_ms", "code", "value"],
+                },
+            }
 
     def send_ok_command(self, line: str) -> dict[str, bool | str]:
-        self._send_command(line)
-        return {"ok": True, "command": line}
+        with self._command_lock:
+            self._send_command(line)
+            return {"ok": True, "command": line}
 
     def apply_params(self, payload: dict[str, Any]) -> dict[str, Any]:
         command_map = {
@@ -439,6 +483,7 @@ class FirmwareTransport:
             "ignore_collision_sensor": lambda value: f"SET CONFIG IGNORE_COLLISION_SENSOR {int(value)}",
             "ignore_external_interlock": lambda value: f"SET CONFIG IGNORE_EXTERNAL_INTERLOCK {int(value)}",
             "allow_motion_without_calibration": lambda value: f"SET CONFIG ALLOW_MOTION_WITHOUT_CALIBRATION {int(value)}",
+            "telemetry_enabled": lambda value: f"SET CONFIG TELEMETRY_ENABLED {int(value)}",
             "max_current": lambda value: f"SET PARAM MAX_CURRENT {float(value):.6f}",
             "max_current_peak": lambda value: f"SET PARAM MAX_CURRENT_PEAK {float(value):.6f}",
             "max_velocity": lambda value: f"SET PARAM MAX_VELOCITY {float(value):.6f}",
@@ -453,14 +498,15 @@ class FirmwareTransport:
         if "calib_valid" in payload and payload["calib_valid"] is not None:
             raise FirmwareError("calib_valid is read-only")
 
-        issued: list[str] = []
-        for key, value in payload.items():
-            if value is None:
-                continue
-            if key not in command_map:
-                raise FirmwareError(f"unsupported parameter: {key}")
-            line = command_map[key](value)
-            self._send_command(line)
-            issued.append(line)
+        with self._command_lock:
+            issued: list[str] = []
+            for key, value in payload.items():
+                if value is None:
+                    continue
+                if key not in command_map:
+                    raise FirmwareError(f"unsupported parameter: {key}")
+                line = command_map[key](value)
+                self._send_command(line)
+                issued.append(line)
 
-        return {"ok": True, "commands": issued}
+            return {"ok": True, "commands": issued}

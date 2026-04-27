@@ -33,6 +33,7 @@
     </header>
 
     <nav class="top-menu panel reveal" aria-label="Główne sekcje GUI">
+      <a href="#wizard">Kreator uruchomienia</a>
       <a href="#online">Podgląd online</a>
       <a href="#global">Ustawienia globalne</a>
       <a href="#safety">Bezpieczeństwo</a>
@@ -45,6 +46,133 @@
     </nav>
 
     <main class="sections-layout">
+      <section id="wizard" class="section-block reveal">
+        <div class="section-title">
+          <div>
+            <div class="panel-kicker">Kreator uruchomienia</div>
+            <h2>Podłączenie, zasilanie i pierwszy test</h2>
+          </div>
+          <p class="panel-note">Sekwencja prowadzi od kabla USB do małego testu FIRST_MOVE_REL bez uruchamiania pełnego HOME.</p>
+        </div>
+
+        <div class="layout">
+          <section class="column column-main">
+            <section class="panel wizard-panel">
+              <div class="panel-head">
+                <div>
+                  <div class="panel-kicker">Przebieg kontrolny</div>
+                  <h2>Kroki stanowiska</h2>
+                </div>
+                <p id="wizard-summary" class="panel-note">Czekam na dane z MCU.</p>
+              </div>
+
+              <div class="wizard-steps">
+                <article class="wizard-step" id="wizard-step-usb">
+                  <span class="wizard-index">1</span>
+                  <div>
+                    <strong>USB-UART podłączony do komputera</strong>
+                    <p>Adapter jest widoczny jako port COM, a Agent może otworzyć połączenie.</p>
+                  </div>
+                  <b id="wizard-usb-state">--</b>
+                </article>
+                <article class="wizard-step" id="wizard-step-uart">
+                  <span class="wizard-index">2</span>
+                  <div>
+                    <strong>UART skrzyżowany i wspólna masa</strong>
+                    <p>GND wspólne, RX adaptera do TX MCU, TX adaptera do RX MCU, bez podawania VCC z adaptera.</p>
+                  </div>
+                  <b id="wizard-uart-state">--</b>
+                </article>
+                <article class="wizard-step" id="wizard-step-power">
+                  <span class="wizard-index">3</span>
+                  <div>
+                    <strong>Zasilacz osi ustawiony i włączony</strong>
+                    <p>Nastawa startowa: 12 V, limit 2 A, tryb CV, mały stabilny prąd spoczynkowy.</p>
+                  </div>
+                  <b id="wizard-power-state">--</b>
+                </article>
+                <article class="wizard-step" id="wizard-step-fault">
+                  <span class="wizard-index">4</span>
+                  <div>
+                    <strong>Błędy skasowane po usunięciu przyczyny</strong>
+                    <p>ACK_FAULT wolno wykonać dopiero, gdy zasilanie i mechanika są sprawdzone.</p>
+                  </div>
+                  <b id="wizard-fault-state">--</b>
+                </article>
+                <article class="wizard-step" id="wizard-step-arming">
+                  <span class="wizard-index">5</span>
+                  <div>
+                    <strong>Etap 2: uzbrajanie bez pełnego ruchu</strong>
+                    <p>Firmware ma być w ARMING_ONLY, bez CONTROLLED_MOTION i bez HOME.</p>
+                  </div>
+                  <b id="wizard-arming-state">--</b>
+                </article>
+                <article class="wizard-step" id="wizard-step-calib">
+                  <span class="wizard-index">6</span>
+                  <div>
+                    <strong>Kalibracja zera w aktualnej pozycji</strong>
+                    <p>CALIB_ZERO zapisuje aktualną pozycję jako punkt odniesienia bez wykonywania ruchu.</p>
+                  </div>
+                  <b id="wizard-calib-state">--</b>
+                </article>
+                <article class="wizard-step" id="wizard-step-enable">
+                  <span class="wizard-index">7</span>
+                  <div>
+                    <strong>ENABLE logiczny</strong>
+                    <p>Oś jest uzbrojona logicznie, ale RUN_ALLOWED dla normalnego ruchu pozostaje zablokowany.</p>
+                  </div>
+                  <b id="wizard-enable-state">--</b>
+                </article>
+                <article class="wizard-step" id="wizard-step-first-move">
+                  <span class="wizard-index">8</span>
+                  <div>
+                    <strong>Pierwszy mały test FIRST_MOVE_REL</strong>
+                    <p>Test ruchu maksymalnie 100 um, tylko w buildzie MOTION i tylko w Etapie 2.</p>
+                  </div>
+                  <b id="wizard-first-move-state">--</b>
+                </article>
+              </div>
+            </section>
+          </section>
+
+          <section class="column column-side">
+            <section class="panel wizard-actions">
+              <div class="panel-head">
+                <div>
+                  <div class="panel-kicker">Akcje kreatora</div>
+                  <h2>Sterowanie sekwencją</h2>
+                </div>
+                <p class="panel-note">Przyciski aktywują się dopiero, gdy stan MCU pasuje do kroku.</p>
+              </div>
+
+              <div class="button-row wizard-button-row">
+                <button id="btn-wizard-refresh" class="btn">Odśwież status</button>
+                <button id="btn-wizard-ack" class="btn tone-muted">ACK_FAULT</button>
+                <button id="btn-wizard-stage1" class="btn tone-muted">Wróć do SAFE</button>
+                <button id="btn-wizard-stage2" class="btn">Ustaw Etap 2</button>
+                <button id="btn-wizard-calib-zero" class="btn tone-muted">CALIB_ZERO</button>
+                <button id="btn-wizard-enable" class="btn tone-ok">ENABLE</button>
+              </div>
+
+              <label class="field">
+                <span>FIRST_MOVE_REL [um]</span>
+                <input id="first-move-rel" type="number" value="50" min="-100" max="100" />
+              </label>
+
+              <div class="button-row wizard-button-row">
+                <button id="btn-first-move-rel" class="btn tone-warn">Wykonaj FIRST_MOVE_REL</button>
+                <button id="btn-wizard-disable" class="btn tone-muted">DISABLE</button>
+                <button id="btn-wizard-qstop" class="btn tone-danger">QSTOP</button>
+              </div>
+
+              <div class="warning-box" id="wizard-blockers">
+                Kreator czeka na pierwszy odczyt statusu.
+              </div>
+            </section>
+          </section>
+        </div>
+      </section>
+
       <section id="online" class="section-block reveal">
         <div class="section-title">
           <div>

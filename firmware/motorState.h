@@ -75,5 +75,7 @@ void ResetZeroPosition (MotorState *s);
 void MotorState_VbusMeasureStart(MotorState *s, ADC_HandleTypeDef *adc);
 void MotorState_VBUS_Calculate(MotorState *s);
 void MotorState_UpdateCurrent(MotorState *s, ADC_HandleTypeDef *adc_first, ADC_HandleTypeDef *adc_second);
+void MotorState_CalibrateCurrentOffsets(MotorState *s);
+void MotorState_ResetCurrentExtrema(MotorState *s);
 
 #endif

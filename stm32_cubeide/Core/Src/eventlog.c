@@ -55,6 +55,7 @@ const char* EventLog_CodeName(EventCode_t code)
         case EVT_COMM_TIMEOUT: return "COMM_TIMEOUT";
         case EVT_OVERRIDE_ON: return "OVERRIDE_ON";
         case EVT_OVERRIDE_OFF: return "OVERRIDE_OFF";
+        case EVT_FIRST_MOVE_TEST: return "FIRST_MOVE_TEST";
         default: return "UNKNOWN";
     }
 }

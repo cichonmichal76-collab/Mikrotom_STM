@@ -38,6 +38,7 @@ class ParamsRequest(BaseModel):
     ignore_external_interlock: int | None = None
     allow_motion_without_calibration: int | None = None
     calib_valid: int | None = None
+    telemetry_enabled: int | None = None
     max_current: float | None = None
     max_current_peak: float | None = None
     max_velocity: float | None = None
@@ -139,6 +140,13 @@ def api_cmd_home():
 def api_cmd_move_rel(request: MoveRelRequest):
     return _handle_firmware_call(
         lambda: _transport().send_ok_command(f"CMD MOVE_REL {request.delta_um}")
+    )
+
+
+@app.post("/api/cmd/first-move-rel")
+def api_cmd_first_move_rel(request: MoveRelRequest):
+    return _handle_firmware_call(
+        lambda: _transport().send_ok_command(f"CMD FIRST_MOVE_REL {request.delta_um}")
     )
 
 

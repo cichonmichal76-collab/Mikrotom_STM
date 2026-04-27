@@ -11,7 +11,7 @@ Current firmware files from `../firmware/` have been synchronized into:
 - `Core/Src`
 - `Core/Inc`
 
-Build outputs such as `Debug/` and `Release/` are intentionally not tracked.
+	Build outputs such as `Debug/` and `Release/` are intentionally not tracked.
 
 See `../docs/STM32_CubeIDE_Build.md` for import and build notes.
 

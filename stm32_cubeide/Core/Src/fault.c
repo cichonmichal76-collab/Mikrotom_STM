@@ -53,6 +53,8 @@ void Fault_Clear(FaultCode_t code)
     g_fault_mask &= ~fault_to_mask(code);
     EventLog_Push(EVT_FAULT_CLEAR, (int32_t)code);
     g_last_fault = fault_pick_reported(g_fault_mask);
+    if (g_fault_mask == 0u)
+        AxisState_Set(AXIS_SAFE);
 }
 
 void Fault_ClearAll(void)

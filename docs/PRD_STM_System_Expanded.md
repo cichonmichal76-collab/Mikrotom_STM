@@ -223,7 +223,7 @@ System MUSI:
 - ISR minimalne
 
 ## Komunikacja
-- UART 460800
+- UART 115200
 - ASCII (v1)
 
 ## GUI

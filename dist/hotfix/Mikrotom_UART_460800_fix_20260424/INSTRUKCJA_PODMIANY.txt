@@ -1,0 +1,34 @@
+Mikrotom UART 460800 - pakiet podmiany
+
+Ten pakiet sluzy do poprawienia niespojnosci baudrate pomiedzy PC i MCU.
+
+Do podmiany sa tylko dwa pliki:
+
+1. agent\bridge.py
+2. scripts\run_agent.bat
+
+Jak uzyc:
+
+1. Zamknij uruchomionego Agenta.
+2. Rozpakuj ten pakiet do katalogu glownego istniejacej instalacji Mikrotom_STM.
+3. Zezwol na nadpisanie plikow.
+4. Uruchom ponownie:
+   - scripts\run_agent.bat COMx
+5. Sprawdz w oknie startowym Agenta, czy wyswietla:
+   - Baudrate: 460800
+
+Wazne:
+
+- MCU jest skonfigurowane na 460800, 8N1.
+- Ten pakiet nie zmienia firmware MCU.
+- Jesli po podmianie nadal widzisz 115200, sprawdz czy zmienna srodowiskowa
+  MIKROTOM_SERIAL_BAUDRATE nie jest ustawiona recznie w systemie lub w sesji.
+
+Przypomnienie polaczen:
+
+- MCU PB3 = USART2_TX
+- MCU PB4 = USART2_RX
+- adapter RX -> PB3
+- adapter TX -> PB4
+- GND -> GND
+- poziom logiczny UART: 3.3V TTL

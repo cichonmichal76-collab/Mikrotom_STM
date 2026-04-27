@@ -3,6 +3,9 @@
  */
 
 #include "motorState.h"
+#include "calibration.h"
+
+static uint8_t g_encoder_first_sample = 1u;
 
 void EncoderStart (uint16_t offset){
 
@@ -17,6 +20,7 @@ void ResetZeroPosition (MotorState *s)
 {
     htim4.Instance->CNT = 0;
     s->encoder_ext = 0;
+    g_encoder_first_sample = 1u;
 
     s->pos_um = 0.0f;
     s->pos_m = 0.0f;
@@ -27,6 +31,8 @@ void ResetZeroPosition (MotorState *s)
 }
 
 void MotorState_Init(MotorState *s){
+
+    g_encoder_first_sample = 1u;
 
     s->VBUS_ADC = 0u;
     s->Vbus = 0.0f;
@@ -107,11 +113,26 @@ void MotorState_Update(MotorState *s, TIM_HandleTypeDef *EncoderTimer, float dt_
     s->pos_um = (float)cnt;
     s->pos_m  = s->pos_um * 1e-6f;
 
-    const float v_raw = (s->pos_m - s->pos_prev_m) / dt_s;
-    s->vel_raw_m_s = v_raw;
-    s->vel_m_s     = s->vel_alpha * v_raw + (1.0f - s->vel_alpha) * s->vel_m_s;
+    if (g_encoder_first_sample)
+    {
+        g_encoder_first_sample = 0u;
+        s->pos_prev_m = s->pos_m;
+        s->vel_raw_m_s = 0.0f;
+        s->vel_m_s = 0.0f;
+    }
+    else
+    {
+        const float v_raw = (s->pos_m - s->pos_prev_m) / dt_s;
+        s->vel_raw_m_s = v_raw;
+        s->vel_m_s     = s->vel_alpha * v_raw + (1.0f - s->vel_alpha) * s->vel_m_s;
+    }
 
-    s->theta_mech_rad = 2.0f * M_PI * (s->pos_um + s->encoder_um_offset - s->encoder_um_zero) / s->um_per_elec_rad;
+    /*
+     * The FOC code uses this angle as the electrical field angle. Route it
+     * through calibration so CALIB_SIGN / CALIB_PITCH_UM affect closed-loop
+     * direction without changing the low-level FOC implementation.
+     */
+    s->theta_mech_rad = Calibration_PositionToElecRad((int32_t)s->pos_um);
 }
 
 /* Restored current-feedback path from the original controller. */
@@ -134,6 +155,30 @@ void MotorState_UpdateCurrent(MotorState *s, ADC_HandleTypeDef *adc_first, ADC_H
     if (s->current_U < s->minValCurr) s->minValCurr = s->current_U;
     if (s->current_V < s->minValCurr) s->minValCurr = s->current_V;
     if (s->current_W < s->minValCurr) s->minValCurr = s->current_W;
+}
+
+void MotorState_ResetCurrentExtrema(MotorState *s)
+{
+    if (s == 0) return;
+    s->maxValCurr = 0.0f;
+    s->minValCurr = 0.0f;
+}
+
+void MotorState_CalibrateCurrentOffsets(MotorState *s)
+{
+    if (s == 0) return;
+
+    __disable_irq();
+    s->current_U_ADC_offset = s->current_U_ADC;
+    s->current_V_ADC_offset = s->current_V_ADC;
+    s->current_U = 0.0f;
+    s->current_V = 0.0f;
+    s->current_W = 0.0f;
+    s->current_U_raw = 0.0f;
+    s->current_V_raw = 0.0f;
+    s->maxValCurr = 0.0f;
+    s->minValCurr = 0.0f;
+    __enable_irq();
 }
 
 void MotorState_VBUS_Calculate(MotorState *s)

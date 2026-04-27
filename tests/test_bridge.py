@@ -135,7 +135,7 @@ def test_drain_events_reads_firmware_queue_and_logs(monkeypatch: pytest.MonkeyPa
     )
 
     monkeypatch.setattr(transport, "_read_param_value", lambda name: "2")
-    monkeypatch.setattr(transport, "_send_command", lambda line: next(responses))
+    monkeypatch.setattr(transport, "_send_command", lambda line, **kwargs: next(responses))
 
     drained = transport.drain_events()
     monkeypatch.setattr(transport, "_read_param_value", lambda name: "0")

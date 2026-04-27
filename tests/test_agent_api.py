@@ -66,6 +66,10 @@ def test_agent_api_endpoints(api_client):
         == "CMD MOVE_REL 150"
     )
     assert (
+        api_client.post("/api/cmd/first-move-rel", json={"delta_um": 50}).json()["command"]
+        == "CMD FIRST_MOVE_REL 50"
+    )
+    assert (
         api_client.post("/api/cmd/move-abs", json={"target_um": 2500}).json()["command"]
         == "CMD MOVE_ABS 2500"
     )

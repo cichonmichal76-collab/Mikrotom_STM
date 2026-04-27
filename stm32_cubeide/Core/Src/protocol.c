@@ -12,8 +12,11 @@
 #include "watchdogs.h"
 #include "eventlog.h"
 #include "motorState.h"
+#include "trajectory.h"
 #include "config_store.h"
 #include "app_build_config.h"
+#include "telemetry.h"
+#include "safety_monitor.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,6 +30,7 @@
 #define PROTOCOL_PENDING_ERR_CMD_OVERFLOW (1u << 1)
 
 extern volatile MotorState state;
+extern volatile MotorTrajectory traj;
 
 static uint8_t g_rx_byte = 0u;
 static char g_rx_buffer[PROTOCOL_RX_BUFFER_SIZE];
@@ -36,6 +40,7 @@ static volatile uint8_t g_cmd_head = 0u;
 static volatile uint8_t g_cmd_tail = 0u;
 static volatile uint8_t g_cmd_count = 0u;
 static volatile uint8_t g_pending_errors = 0u;
+static volatile uint8_t g_rx_active = 0u;
 
 uint8_t Protocol_GetLastRxByte(void){ return g_rx_byte; }
 
@@ -153,13 +158,33 @@ void Protocol_Init(void)
     g_cmd_tail = 0u;
     g_cmd_count = 0u;
     g_pending_errors = 0u;
+    g_rx_active = 0u;
     memset(g_rx_buffer, 0, sizeof(g_rx_buffer));
     memset(g_cmd_queue, 0, sizeof(g_cmd_queue));
-    HAL_UART_Receive_IT(&huart2, &g_rx_byte, 1);
+    Protocol_EnsureRxActive();
+}
+
+void Protocol_EnsureRxActive(void)
+{
+    if (!g_rx_active)
+    {
+        if (HAL_UART_Receive_IT(&huart2, &g_rx_byte, 1) == HAL_OK)
+            g_rx_active = 1u;
+    }
+}
+
+void Protocol_RxErrorCallback(void)
+{
+    g_rx_active = 0u;
+    g_rx_index = 0u;
+    __HAL_UART_CLEAR_OREFLAG(&huart2);
+    (void)HAL_UART_AbortReceive_IT(&huart2);
+    Protocol_EnsureRxActive();
 }
 
 void Protocol_RxCpltCallback(uint8_t byte)
 {
+    g_rx_active = 0u;
     if ((byte == '\n') || (byte == '\r'))
     {
         if (g_rx_index > 0u)
@@ -179,7 +204,7 @@ void Protocol_RxCpltCallback(uint8_t byte)
             protocol_queue_error(PROTOCOL_PENDING_ERR_RX_OVERFLOW);
         }
     }
-    HAL_UART_Receive_IT(&huart2, &g_rx_byte, 1);
+    Protocol_EnsureRxActive();
 }
 
 static void handle_get_simple(const char *arg1)
@@ -218,6 +243,12 @@ static void handle_get_simple(const char *arg1)
         protocol_rsp_config_u8("HOMING_SUCCESSFUL", state.HomingSuccessful ? 1u : 0u);
     else if (strcmp(arg1, "HOMING_ONGOING") == 0)
         protocol_rsp_config_u8("HOMING_ONGOING", state.HomingOngoing ? 1u : 0u);
+    else if (strcmp(arg1, "FIRST_MOVE_TEST_ACTIVE") == 0)
+        protocol_rsp_config_u8("FIRST_MOVE_TEST_ACTIVE", AxisControl_FirstMoveTestActive());
+    else if (strcmp(arg1, "FIRST_MOVE_MAX_DELTA") == 0)
+        protocol_rsp_param_i32("FIRST_MOVE_MAX_DELTA", 100);
+    else if (strcmp(arg1, "TELEMETRY_ENABLED") == 0)
+        protocol_rsp_config_u8("TELEMETRY_ENABLED", Telemetry_IsEnabled());
     else if (strcmp(arg1, "CONFIG_LOADED") == 0)
         protocol_rsp_config_u8("CONFIG_LOADED", ConfigStore_IsLoaded());
     else if (strcmp(arg1, "SAFE_INTEGRATION") == 0)
@@ -260,6 +291,17 @@ static void handle_get_param(const char *name)
     else if (strcmp(name, "CALIB_ZERO_POS") == 0) protocol_rsp_param_i32("CALIB_ZERO_POS", Calibration_GetZeroPosUm());
     else if (strcmp(name, "CALIB_PITCH_UM") == 0) protocol_rsp_param_f("CALIB_PITCH_UM", Calibration_GetPitchUm());
     else if (strcmp(name, "CALIB_SIGN") == 0) protocol_rsp_param_i32("CALIB_SIGN", Calibration_GetSign());
+    else if (strcmp(name, "CURRENT_U") == 0) protocol_rsp_param_f("CURRENT_U", state.current_U);
+    else if (strcmp(name, "CURRENT_V") == 0) protocol_rsp_param_f("CURRENT_V", state.current_V);
+    else if (strcmp(name, "CURRENT_W") == 0) protocol_rsp_param_f("CURRENT_W", state.current_W);
+    else if (strcmp(name, "CURRENT_U_RAW") == 0) protocol_rsp_param_f("CURRENT_U_RAW", state.current_U_raw);
+    else if (strcmp(name, "CURRENT_V_RAW") == 0) protocol_rsp_param_f("CURRENT_V_RAW", state.current_V_raw);
+    else if (strcmp(name, "CURRENT_U_ADC") == 0) protocol_rsp_param_i32("CURRENT_U_ADC", state.current_U_ADC);
+    else if (strcmp(name, "CURRENT_V_ADC") == 0) protocol_rsp_param_i32("CURRENT_V_ADC", state.current_V_ADC);
+    else if (strcmp(name, "CURRENT_U_ADC_OFFSET") == 0) protocol_rsp_param_i32("CURRENT_U_ADC_OFFSET", state.current_U_ADC_offset);
+    else if (strcmp(name, "CURRENT_V_ADC_OFFSET") == 0) protocol_rsp_param_i32("CURRENT_V_ADC_OFFSET", state.current_V_ADC_offset);
+    else if (strcmp(name, "CURRENT_MAX") == 0) protocol_rsp_param_f("CURRENT_MAX", state.maxValCurr);
+    else if (strcmp(name, "CURRENT_MIN") == 0) protocol_rsp_param_f("CURRENT_MIN", state.minValCurr);
     else protocol_rsp_err("GET_PARAM_UNKNOWN");
 }
 
@@ -388,16 +430,17 @@ static void handle_set_config(const char *name, const char *value)
         if (!protocol_parse_i32(value, &stage) || (stage < 1) || (stage > 3)) { protocol_rsp_err("STAGE_RANGE"); return; }
         Commissioning_SetStage((uint8_t)stage);
         AxisControl_NotifyConfigChanged();
-        protocol_rsp_saved_ok();
+        protocol_rsp_ok();
     }
     else
     {
         uint8_t v;
         if (!protocol_parse_bool(value, &v)) { protocol_rsp_err("SET_CONFIG_BOOL_RANGE"); return; }
 
-        if (strcmp(name, "SAFE_MODE") == 0) { Commissioning_SetSafeMode(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
-        else if (strcmp(name, "ARMING_ONLY") == 0) { Commissioning_SetArmingOnly(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
-        else if (strcmp(name, "CONTROLLED_MOTION") == 0) { Commissioning_SetControlledMotion(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
+        if (strcmp(name, "SAFE_MODE") == 0) { Commissioning_SetSafeMode(v); AxisControl_NotifyConfigChanged(); protocol_rsp_ok(); }
+        else if (strcmp(name, "ARMING_ONLY") == 0) { Commissioning_SetArmingOnly(v); AxisControl_NotifyConfigChanged(); protocol_rsp_ok(); }
+        else if (strcmp(name, "CONTROLLED_MOTION") == 0) { Commissioning_SetControlledMotion(v); AxisControl_NotifyConfigChanged(); protocol_rsp_ok(); }
+        else if (strcmp(name, "TELEMETRY_ENABLED") == 0) { Telemetry_SetEnabled(v); protocol_rsp_ok(); }
         else if (strcmp(name, "BRAKE_INSTALLED") == 0) { SafetyConfig_SetBrakeInstalled(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
         else if (strcmp(name, "COLLISION_SENSOR_INSTALLED") == 0) { SafetyConfig_SetCollisionInstalled(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
         else if (strcmp(name, "PTC_INSTALLED") == 0) { SafetyConfig_SetPtcInstalled(v); AxisControl_NotifyConfigChanged(); protocol_rsp_saved_ok(); }
@@ -420,16 +463,63 @@ static void handle_cmd(const char *arg1, const char *arg2)
     else if (strcmp(arg1, "STOP") == 0) { if (AxisControl_Stop()) protocol_rsp_ok(); else protocol_rsp_err("STOP_REJECTED"); }
     else if (strcmp(arg1, "QSTOP") == 0) { if (AxisControl_QStop()) protocol_rsp_ok(); else protocol_rsp_err("QSTOP_REJECTED"); }
     else if (strcmp(arg1, "ACK_FAULT") == 0) { Fault_ClearAll(); AxisControl_RefreshState(); protocol_rsp_ok(); }
+    else if (strcmp(arg1, "CALIB_CURRENT_ZERO") == 0)
+    {
+        AxisState_t axis_state = AxisState_Get();
+        if (state.enabled || state.HomingOngoing ||
+            (axis_state == AXIS_MOTION) || (axis_state == AXIS_CALIBRATION))
+        {
+            protocol_rsp_err("CALIB_CURRENT_ZERO_NOT_SAFE");
+            return;
+        }
+
+        MotorState_CalibrateCurrentOffsets((MotorState*)&state);
+        SafetyMonitor_Init();
+        EventLog_Push(EVT_CALIB_OK, 1);
+        protocol_rsp_saved_ok();
+    }
     else if (strcmp(arg1, "CALIB_ZERO") == 0)
     {
+        if (state.enabled || state.HomingOngoing || (AxisState_Get() == AXIS_MOTION))
+        {
+            protocol_rsp_err("CALIB_ZERO_NOT_SAFE");
+            return;
+        }
+
         AxisState_Set(AXIS_CALIBRATION);
         EventLog_Push(EVT_CALIB_START, 0);
-        Calibration_SetZeroPosUm((int32_t)state.pos_um);
+
+        __disable_irq();
+        ResetZeroPosition((MotorState*)&state);
+        traj.start_pos_m = state.pos_m;
+        traj.dest_pos_m = state.pos_m;
+        traj.traj_dist_m = 0.0f;
+        traj.T_traj_s = 0.0f;
+        traj.a_m_s2 = 0.0f;
+        traj.a_set_m_s2 = 0.0f;
+        traj.pos_set_m = state.pos_m;
+        traj.vel_set_m_s = 0.0f;
+        traj.t_elapsed_s = 0.0f;
+        traj.traj_done = 1;
+        state.pos_set_m = state.pos_m;
+        state.vel_set_m_s = 0.0f;
+        __enable_irq();
+
+        Calibration_SetZeroPosUm(0);
         Calibration_SetValid(1u);
         state.calibrated = 1u;
         EventLog_Push(EVT_CALIB_OK, (int32_t)state.pos_um);
         AxisControl_NotifyCalibrationComplete(1u);
         protocol_rsp_saved_ok();
+    }
+    else if (strcmp(arg1, "CALIB_ALIGN_ZERO") == 0)
+    {
+#if APP_MOTION_IMPLEMENTED
+        if (MotionControl_RequestAlignZero()) protocol_rsp_ok();
+        else protocol_rsp_err("CALIB_ALIGN_ZERO_REJECTED");
+#else
+        protocol_rsp_err("CALIB_ALIGN_ZERO_UNAVAILABLE");
+#endif
     }
     else if (strcmp(arg1, "HOME") == 0)
     {
@@ -447,6 +537,14 @@ static void handle_cmd(const char *arg1, const char *arg2)
         if (!protocol_parse_i32(arg2, &delta_um)) { protocol_rsp_err("MOVE_REL_RANGE"); return; }
         if (AxisControl_MoveRelUm(delta_um)) protocol_rsp_ok();
         else protocol_rsp_err("MOVE_REL_REJECTED");
+    }
+    else if (strcmp(arg1, "FIRST_MOVE_REL") == 0)
+    {
+        int32_t delta_um;
+        if (arg2 == NULL) { protocol_rsp_err("FIRST_MOVE_REL_FORMAT"); return; }
+        if (!protocol_parse_i32(arg2, &delta_um)) { protocol_rsp_err("FIRST_MOVE_REL_RANGE"); return; }
+        if (AxisControl_FirstMoveRelUm(delta_um)) protocol_rsp_ok();
+        else protocol_rsp_err("FIRST_MOVE_REL_REJECTED");
     }
     else if (strcmp(arg1, "MOVE_ABS") == 0)
     {
@@ -474,6 +572,8 @@ void Protocol_Process(void)
         protocol_rsp_err("RX_OVERFLOW");
     if ((pending_errors & PROTOCOL_PENDING_ERR_CMD_OVERFLOW) != 0u)
         protocol_rsp_err("CMD_OVERFLOW");
+
+    Protocol_EnsureRxActive();
 
     __disable_irq();
     if (g_cmd_count == 0u)

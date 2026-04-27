@@ -13,6 +13,9 @@ window.DEMO_STATE = {
     homing_started: 0,
     homing_successful: 0,
     homing_ongoing: 0,
+    first_move_test_active: 0,
+    first_move_max_delta_um: 100,
+    telemetry_enabled: 1,
     config_loaded: 0,
     safe_integration: 0,
     motion_implemented: 1,
@@ -210,6 +213,23 @@ window.demoHandleCommand = function(type, payload) {
       window.demoPushEvent("MOVE_REL", Number(payload?.delta_um || 0));
       return { ok: true };
     }
+    case "firstMoveRel": {
+      const delta = Number(payload?.delta_um || 0);
+      if (status.motion_implemented !== 1 || status.safe_integration === 1) return { ok: false, error: "FIRST_MOVE_REL_REJECTED" };
+      if (status.fault_mask !== 0 || status.vbus_valid !== 1) return { ok: false, error: "FIRST_MOVE_REL_REJECTED" };
+      if (status.arming_only !== 1 || status.controlled_motion !== 0 || status.enabled !== 1) return { ok: false, error: "FIRST_MOVE_REL_REJECTED" };
+      if (status.calib_valid !== 1 && status.allow_motion_without_calibration !== 1) return { ok: false, error: "FIRST_MOVE_REL_REJECTED" };
+      if (Math.abs(delta) === 0 || Math.abs(delta) > status.first_move_max_delta_um) return { ok: false, error: "FIRST_MOVE_REL_REJECTED" };
+      status.first_move_test_active = 1;
+      status.position_set_um = status.position_um + delta;
+      window.demoPushEvent("FIRST_MOVE_TEST", delta);
+      setTimeout(() => {
+        status.first_move_test_active = 0;
+        status.enabled = 0;
+        window.demoRecompute();
+      }, 900);
+      return { ok: true };
+    }
     case "moveAbs": {
       window.demoRecompute();
       if (!status.run_allowed) return { ok: false, error: "RUN_NOT_ALLOWED" };
@@ -236,6 +256,9 @@ window.demoHandleCommand = function(type, payload) {
       }
       if (raw.startsWith("CMD MOVE_REL ")) {
         return window.demoHandleCommand("moveRel", { delta_um: Number(raw.slice(13)) });
+      }
+      if (raw.startsWith("CMD FIRST_MOVE_REL ")) {
+        return window.demoHandleCommand("firstMoveRel", { delta_um: Number(raw.slice(19)) });
       }
       if (raw.startsWith("CMD MOVE_ABS ")) {
         return window.demoHandleCommand("moveAbs", { target_um: Number(raw.slice(13)) });

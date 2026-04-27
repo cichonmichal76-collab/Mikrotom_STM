@@ -8,6 +8,8 @@ uint8_t AxisControl_Stop(void);
 uint8_t AxisControl_QStop(void);
 uint8_t AxisControl_MoveRelUm(int32_t delta_um);
 uint8_t AxisControl_MoveAbsUm(int32_t target_um);
+uint8_t AxisControl_FirstMoveRelUm(int32_t delta_um);
+uint8_t AxisControl_FirstMoveTestActive(void);
 void AxisControl_RefreshState(void);
 void AxisControl_NotifyConfigChanged(void);
 void AxisControl_NotifyCalibrationComplete(uint8_t success);

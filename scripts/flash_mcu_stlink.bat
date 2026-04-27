@@ -18,6 +18,18 @@ set "STM32_PROGRAMMER_CLI=%ProgramFiles%\STMicroelectronics\STM32Cube\STM32CubeP
 if not exist "%STM32_PROGRAMMER_CLI%" (
     set "STM32_PROGRAMMER_CLI=%ProgramFiles(x86)%\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin\STM32_Programmer_CLI.exe"
 )
+if not exist "%STM32_PROGRAMMER_CLI%" (
+    for /d %%D in ("C:\ST\STM32CubeIDE_*") do (
+        for /f "delims=" %%P in ('dir /b /ad "%%~fD\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.win32_*" 2^>nul') do (
+            if exist "%%~fD\STM32CubeIDE\plugins\%%P\tools\bin\STM32_Programmer_CLI.exe" (
+                set "STM32_PROGRAMMER_CLI=%%~fD\STM32CubeIDE\plugins\%%P\tools\bin\STM32_Programmer_CLI.exe"
+                goto :programmer_found
+            )
+        )
+    )
+)
+
+:programmer_found
 
 if not exist "%STM32_PROGRAMMER_CLI%" (
     echo ERROR: STM32_Programmer_CLI.exe not found.
@@ -47,4 +59,4 @@ echo   - execute HOME first, then a tiny MOVE_REL
 echo.
 pause
 
-"%STM32_PROGRAMMER_CLI%" -c port=SWD -w "%FW%" -v -rst
+"%STM32_PROGRAMMER_CLI%" -c port=SWD mode=UR -w "%FW%" -v -rst

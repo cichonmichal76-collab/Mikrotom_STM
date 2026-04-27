@@ -32,6 +32,7 @@ const API_ENDPOINTS = [
   ["POST", "/api/cmd/home", "jawne uruchomienie sekwencji HOME"],
   ["POST", "/api/cmd/stop", "STOP"],
   ["POST", "/api/cmd/qstop", "QSTOP"],
+  ["POST", "/api/cmd/first-move-rel", "pierwszy mały test ruchu w Etapie 2"],
   ["POST", "/api/cmd/move-rel", "kontrolowany ruch względny"],
   ["POST", "/api/cmd/move-abs", "kontrolowany ruch do pozycji bezwzględnej"],
   ["POST", "/api/cmd/raw", "surowa komenda serwisowa"]
@@ -45,6 +46,7 @@ const ERROR_TRANSLATIONS = {
   FAULT_ACTIVE: "Aktywny błąd - najpierw usuń przyczynę i potwierdź błąd",
   RUN_NOT_ALLOWED: "Ruch zablokowany przez RUN_ALLOWED",
   LIMIT_REJECTED: "Ruch odrzucony przez limit",
+  FIRST_MOVE_REL_REJECTED: "Pierwszy test ruchu odrzucony przez firmware",
   UNKNOWN_DEMO_COMMAND: "Nieznana komenda w trybie DEMO"
 };
 
@@ -57,6 +59,7 @@ const HELP_TEXTS = [
   ["#badge-run", "RUN_ALLOWED to centralna bramka ruchu. Ruch wolno wykonać tylko wtedy, gdy firmware ustawi tę wartość na 1."],
   ["#badge-stage", "Aktualny etap uruchomienia. Etap 1 to diagnostyka bez ruchu, etap 3 dopuszcza kontrolowany ruch."],
   [".top-menu a[href='#online']", "Przejście do ekranu podglądu online: status, telemetria, ruch i podstawowe akcje operatora."],
+  [".top-menu a[href='#wizard']", "Przejście do kreatora uruchomienia. To sekwencja od fizycznego podłączenia stanowiska do pierwszego małego testu FIRST_MOVE_REL."],
   [".top-menu a[href='#global']", "Przejście do parametrów osi i konfiguracji bazowej, takich jak prąd, prędkość i limity pozycji."],
   [".top-menu a[href='#safety']", "Przejście do ustawień bezpieczeństwa oraz jawnych obejść używanych tylko podczas kontrolowanych testów."],
   [".top-menu a[href='#uart']", "Przejście do diagnostyki połączenia UART między PC Agentem i STM32."],
@@ -133,6 +136,7 @@ const HELP_TEXTS = [
 
 const FIELD_HELP_TEXTS = {
   "move-rel": "Wartość ruchu względnego w mikrometrach. Dodatnia wartość przesuwa oś w jedną stronę, ujemna w przeciwną. Firmware nadal sprawdza RUN_ALLOWED i limity.",
+  "first-move-rel": "Wartość pierwszego testu ruchu w mikrometrach. Firmware przyjmuje tylko bardzo mały krok w Etapie 2, bez pełnego HOME.",
   "move-abs": "Docelowa pozycja bezwzględna w mikrometrach. Komenda jest odrzucana, jeśli narusza limity albo RUN_ALLOWED = 0.",
   "cfg-max-current": "MAX_CURRENT [A] ogranicza nominalny prąd sterowania. Zbyt wysoka wartość może przegrzać napęd lub mechanikę, dlatego na start ustawiaj konserwatywnie.",
   "cfg-max-current-peak": "MAX_CURRENT_PEAK [A] to krótkotrwały limit szczytowy prądu. Powinien być wyższy od MAX_CURRENT, ale nadal bezpieczny dla sprzętu.",
@@ -164,6 +168,7 @@ const BUTTON_HELP_TEXTS = {
   "btn-stop": "Wysyła CMD STOP. To normalne zatrzymanie, które powinno być zawsze dostępne.",
   "btn-qstop": "Wysyła CMD QSTOP. To szybkie zatrzymanie i wyjście do bezpieczniejszego stanu.",
   "btn-move-rel": "Wysyła CMD MOVE_REL z wartością z pola ruchu względnego. Przycisk jest blokowany, gdy RUN_ALLOWED nie pozwala na ruch.",
+  "btn-first-move-rel": "Wysyła CMD FIRST_MOVE_REL. To mały test ruchu przed pełnym homingiem, dostępny tylko w buildzie MOTION i w Etapie 2.",
   "btn-move-abs": "Wysyła CMD MOVE_ABS z pozycją docelową. Firmware nadal weryfikuje limity.",
   "btn-calib-zero": "Wysyła CMD CALIB_ZERO, czyli ustawienie aktualnej pozycji jako zera kalibracyjnego.",
   "btn-stage-1": "Ustawia etap 1 po zaznaczeniu checklisty. To tryb bez ruchu.",
@@ -173,7 +178,15 @@ const BUTTON_HELP_TEXTS = {
   "btn-save-safety-overrides": "Wysyła konfigurację safety i obejścia. Używaj świadomie, bo te ustawienia wpływają na ryzyko uruchomienia.",
   "btn-refresh-diagnostics": "Odświeża informacje UART i SQL z endpointu diagnostycznego Agenta.",
   "btn-send-raw": "Wysyła surową komendę z pola RAW.",
-  "btn-refresh": "Ręcznie odświeża dane z Agenta albo modelu DEMO."
+  "btn-refresh": "Ręcznie odświeża dane z Agenta albo modelu DEMO.",
+  "btn-wizard-refresh": "Odświeża stan kreatora z MCU.",
+  "btn-wizard-ack": "Wysyła ACK_FAULT w kreatorze po usunięciu przyczyny błędu.",
+  "btn-wizard-stage1": "Przywraca tryb SAFE i Etap 1.",
+  "btn-wizard-stage2": "Ustawia Etap 2, czyli ARMING_ONLY bez CONTROLLED_MOTION.",
+  "btn-wizard-calib-zero": "Wysyła CMD CALIB_ZERO z kreatora. Aktualna pozycja zostaje punktem zera do pierwszego testu.",
+  "btn-wizard-enable": "Wysyła ENABLE jako przygotowanie do małego testu FIRST_MOVE_REL.",
+  "btn-wizard-disable": "Wyłącza oś po teście albo przy przerwaniu sekwencji.",
+  "btn-wizard-qstop": "Szybkie zatrzymanie z poziomu kreatora."
 };
 
 const CHECK_HELP_TEXTS = [
@@ -302,6 +315,7 @@ const BUTTON_HELP_REFS = {
   "btn-stop": "POST /api/cmd/stop -> CMD STOP",
   "btn-qstop": "POST /api/cmd/qstop -> CMD QSTOP",
   "btn-move-rel": "POST /api/cmd/move-rel -> CMD MOVE_REL",
+  "btn-first-move-rel": "POST /api/cmd/first-move-rel -> CMD FIRST_MOVE_REL",
   "btn-move-abs": "POST /api/cmd/move-abs -> CMD MOVE_ABS",
   "btn-calib-zero": "POST /api/cmd/raw -> CMD CALIB_ZERO",
   "btn-stage-1": "POST /api/params commissioning_stage=1",
@@ -311,7 +325,15 @@ const BUTTON_HELP_REFS = {
   "btn-save-safety-overrides": "POST /api/params -> SET CONFIG ...",
   "btn-refresh-diagnostics": "GET /api/debug/vars",
   "btn-send-raw": "POST /api/cmd/raw",
-  "btn-refresh": "refreshData() / GET status+telemetry+events"
+  "btn-refresh": "refreshData() / GET status+telemetry+events",
+  "btn-wizard-refresh": "refreshData() / GET status+telemetry+events",
+  "btn-wizard-ack": "POST /api/cmd/ack-fault -> CMD ACK_FAULT",
+  "btn-wizard-stage1": "POST /api/params -> commissioning_stage=1",
+  "btn-wizard-stage2": "POST /api/params -> commissioning_stage=2",
+  "btn-wizard-calib-zero": "POST /api/cmd/raw -> CMD CALIB_ZERO",
+  "btn-wizard-enable": "POST /api/cmd/enable -> CMD ENABLE",
+  "btn-wizard-disable": "POST /api/cmd/disable -> CMD DISABLE",
+  "btn-wizard-qstop": "POST /api/cmd/qstop -> CMD QSTOP"
 };
 
 const CHECK_HELP_REFS = {
@@ -688,6 +710,9 @@ async function executeCommand(type, payload = {}) {
       case "moveRel":
         result = await apiPost("/api/cmd/move-rel", payload);
         break;
+      case "firstMoveRel":
+        result = await apiPost("/api/cmd/first-move-rel", payload);
+        break;
       case "moveAbs":
         result = await apiPost("/api/cmd/move-abs", payload);
         break;
@@ -750,7 +775,7 @@ function demoDiagnostics() {
   return {
     transport: {
       port: "DEMO",
-      baudrate: 115200,
+    baudrate: 115200,
       connected: true,
       heartbeat_interval_s: 0.35,
       event_cache_depth: window.DEMO_STATE.events.length
@@ -854,6 +879,9 @@ function renderStatusDetails(status) {
     ["Homing rozpoczęty", formatBool(status.homing_started)],
     ["Homing w toku", formatBool(status.homing_ongoing)],
     ["Homing zakończony", formatBool(status.homing_successful)],
+    ["Pierwszy test ruchu aktywny", formatBool(status.first_move_test_active)],
+    ["Maksymalny pierwszy ruch", `${status.first_move_max_delta_um ?? 100} um`],
+    ["Telemetria UART włączona", formatBool(status.telemetry_enabled ?? 1)],
     ["Kalibracja ważna", formatBool(status.calib_valid)],
     ["VBUS", vbusValid ? `${fmt(status.vbus_V, 2)} V` : "brak próbki"],
     ["VBUS poprawny", formatBool(status.vbus_valid)],
@@ -868,6 +896,93 @@ function renderStatusDetails(status) {
       <strong>${value}</strong>
     </div>
   `).join("");
+}
+
+function setWizardStep(id, ok, text) {
+  const card = $(id);
+  card.classList.toggle("ok", ok);
+  card.classList.toggle("pending", !ok);
+  const value = card.querySelector("b");
+  if (value) value.textContent = text;
+}
+
+function wizardFirstMoveReady(status) {
+  const delta = Number($("first-move-rel")?.value || 0);
+  const calibrationOk = (
+    Number(status.calib_valid || 0) === 1 ||
+    Number(status.allow_motion_without_calibration || 0) === 1
+  );
+  return (
+    uiState.connected &&
+    Number(status.motion_implemented || 0) === 1 &&
+    Number(status.safe_integration || 0) === 0 &&
+    Number(status.vbus_valid || 0) === 1 &&
+    Number(status.fault_mask || 0) === 0 &&
+    Number(status.safe_mode || 0) === 0 &&
+    Number(status.arming_only || 0) === 1 &&
+    Number(status.controlled_motion || 0) === 0 &&
+    Number(status.enabled || 0) === 1 &&
+    Number(status.homing_ongoing || 0) === 0 &&
+    calibrationOk &&
+    Math.abs(delta) > 0 &&
+    Math.abs(delta) <= Number(status.first_move_max_delta_um || 100)
+  );
+}
+
+function wizardBlockers(status) {
+  const blockers = [];
+  const delta = Number($("first-move-rel")?.value || 0);
+
+  if (!uiState.connected) blockers.push("brak połączenia z Agentem/MCU");
+  if (Number(status.motion_implemented || 0) !== 1) blockers.push("aktywny jest wsad SAFE bez ruchu");
+  if (Number(status.safe_integration || 0) !== 0) blockers.push("firmware jest w trybie bezpiecznej integracji");
+  if (Number(status.vbus_valid || 0) !== 1) blockers.push("VBUS nie jest poprawny");
+  if (Number(status.fault_mask || 0) !== 0) blockers.push("aktywny błąd firmware");
+  if (Number(status.arming_only || 0) !== 1) blockers.push("nie ustawiono Etapu 2 / ARMING_ONLY");
+  if (Number(status.controlled_motion || 0) !== 0) blockers.push("CONTROLLED_MOTION ma być wyłączony dla pierwszego testu");
+  if (Number(status.enabled || 0) !== 1) blockers.push("brak ENABLE");
+  if (Number(status.calib_valid || 0) !== 1 && Number(status.allow_motion_without_calibration || 0) !== 1) blockers.push("brak kalibracji albo świadomego pozwolenia na ruch bez kalibracji");
+  if (Math.abs(delta) === 0 || Math.abs(delta) > Number(status.first_move_max_delta_um || 100)) blockers.push("wartość FIRST_MOVE_REL musi mieścić się w zakresie +/-100 um");
+
+  return blockers;
+}
+
+function renderWizard(status) {
+  const motion = Number(status.motion_implemented || 0) === 1;
+  const safe = Number(status.safe_integration || 0) === 1;
+  const faultClear = Number(status.fault_mask || 0) === 0 && String(status.fault || "") === "NONE";
+  const powerOk = Number(status.vbus_valid || 0) === 1;
+  const arming = Number(status.arming_only || 0) === 1 && Number(status.controlled_motion || 0) === 0;
+  const calibrationOk = Number(status.calib_valid || 0) === 1 || Number(status.allow_motion_without_calibration || 0) === 1;
+  const enabled = Number(status.enabled || 0) === 1;
+  const firstMoveReady = wizardFirstMoveReady(status);
+  const blockers = wizardBlockers(status);
+
+  setWizardStep("wizard-step-usb", uiState.connected, uiState.connected ? "OK" : "BRAK");
+  setWizardStep("wizard-step-uart", uiState.connected, uiState.connected ? "OK" : "BRAK");
+  setWizardStep("wizard-step-power", powerOk, powerOk ? `${fmt(status.vbus_V, 2)} V` : "CZEKA");
+  setWizardStep("wizard-step-fault", faultClear, faultClear ? "NONE" : String(status.fault || "--"));
+  setWizardStep("wizard-step-arming", arming, arming ? "ETAP 2" : `ETAP ${status.commissioning_stage ?? "--"}`);
+  setWizardStep("wizard-step-calib", calibrationOk, calibrationOk ? "OK" : "CZEKA");
+  setWizardStep("wizard-step-enable", enabled, enabled ? "ENABLE" : "OFF");
+  setWizardStep("wizard-step-first-move", firstMoveReady, firstMoveReady ? "GOTOWY" : motion && !safe ? "CZEKA" : "SAFE");
+
+  $("wizard-summary").textContent = safe
+    ? "MCU jest w bezpiecznym wsadzie SAFE. Kreator może sprawdzić komunikację i zasilanie, ale nie wykona testu ruchu."
+    : "MCU jest w buildzie MOTION. Pierwszy test używa FIRST_MOVE_REL w Etapie 2, bez pełnego HOME.";
+
+  $("wizard-blockers").textContent = blockers.length
+    ? `Blokady pierwszego testu: ${blockers.join(", ")}.`
+    : "Warunki pierwszego testu są spełnione. Operator musi fizycznie nadzorować oś i zasilacz.";
+
+  $("btn-wizard-ack").disabled = !uiState.connected || faultClear || !powerOk;
+  $("btn-wizard-stage1").disabled = !uiState.connected;
+  $("btn-wizard-stage2").disabled = !uiState.connected || !faultClear || !powerOk;
+  $("btn-wizard-calib-zero").disabled = !uiState.connected || !faultClear || !powerOk || !arming;
+  $("btn-wizard-enable").disabled = !uiState.connected || !faultClear || !arming || !powerOk;
+  $("btn-first-move-rel").disabled = !firstMoveReady;
+  $("btn-wizard-disable").disabled = !uiState.connected;
+  $("btn-wizard-qstop").disabled = !uiState.connected;
 }
 
 function renderEvents() {
@@ -1038,6 +1153,7 @@ function renderAll() {
   renderEvents();
   renderDiagnostics();
   renderApiMap();
+  renderWizard(status);
 
   $("footer-left").textContent = `API ${cfg.apiBaseUrl}`;
   $("footer-right").textContent = `Tryb ${cfg.demoMode ? "DEMO" : "LIVE"} | ${motionImplemented ? "RUCH" : "BEZPIECZNA-INTEGRACJA"}`;
@@ -1078,6 +1194,10 @@ function bindActions() {
     delta_um: Number($("move-rel").value || 0)
   }, "Wysłano MOVE_REL"));
 
+  $("btn-first-move-rel").addEventListener("click", () => runAction("firstMoveRel", {
+    delta_um: Number($("first-move-rel").value || 0)
+  }, "Wysłano FIRST_MOVE_REL"));
+
   $("btn-move-abs").addEventListener("click", () => runAction("moveAbs", {
     target_um: Number($("move-abs").value || 0)
   }, "Wysłano MOVE_ABS"));
@@ -1094,6 +1214,31 @@ function bindActions() {
     await refreshData();
     showToast("Dane odświeżone", "info");
   });
+
+  $("btn-wizard-refresh").addEventListener("click", async () => {
+    await refreshData();
+    showToast("Status kreatora odświeżony", "info");
+  });
+
+  $("btn-wizard-ack").addEventListener("click", () => runAction("ackFault", {}, "Wysłano ACK_FAULT"));
+  $("btn-wizard-stage1").addEventListener("click", () => runAction("params", {
+    commissioning_stage: 1,
+    safe_mode: 1,
+    arming_only: 0,
+    controlled_motion: 0
+  }, "Ustawiono SAFE"));
+  $("btn-wizard-stage2").addEventListener("click", () => runAction("params", {
+    commissioning_stage: 2,
+    safe_mode: 0,
+    arming_only: 1,
+    controlled_motion: 0
+  }, "Ustawiono Etap 2"));
+  $("btn-wizard-calib-zero").addEventListener("click", () => runAction("raw", {
+    command: "CMD CALIB_ZERO"
+  }, "Wysłano CALIB_ZERO"));
+  $("btn-wizard-enable").addEventListener("click", () => runAction("enable", {}, "Wysłano ENABLE"));
+  $("btn-wizard-disable").addEventListener("click", () => runAction("disable", {}, "Wysłano DISABLE"));
+  $("btn-wizard-qstop").addEventListener("click", () => runAction("qstop", {}, "Wysłano QSTOP"));
 
   $("btn-stage-1").addEventListener("click", async () => {
     if (!stageChecksSatisfied(1)) {

@@ -7,6 +7,8 @@ $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $deployRoot = Join-Path $root "dist\deployment"
+$techRoot = Join-Path $deployRoot "warianty_techniczne_$Stamp"
+$singleZip = Join-Path $deployRoot "Mikrotom_Wariant_B_JEDEN_PLIK_$Stamp.zip"
 
 if (-not $SkipBuild) {
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts\build_mcu_variants.ps1") both -Stamp $Stamp
@@ -21,17 +23,25 @@ $mcuSafeName = "Mikrotom_Wariant_B_Pakiet_MCU_SAFE_$Stamp"
 $mcuMotionName = "Mikrotom_Wariant_B_Pakiet_MCU_MOTION_$Stamp"
 $docsName = "Mikrotom_Wariant_B_Pakiet_Dokumentacja_$Stamp"
 
-$fullDir = Join-Path $deployRoot $fullName
-$pcDir = Join-Path $deployRoot $pcName
-$mcuSafeDir = Join-Path $deployRoot $mcuSafeName
-$mcuMotionDir = Join-Path $deployRoot $mcuMotionName
-$docsDir = Join-Path $deployRoot $docsName
+$fullDir = Join-Path $techRoot $fullName
+$pcDir = Join-Path $techRoot $pcName
+$mcuSafeDir = Join-Path $techRoot $mcuSafeName
+$mcuMotionDir = Join-Path $techRoot $mcuMotionName
+$docsDir = Join-Path $techRoot $docsName
 
 New-Item -ItemType Directory -Path $deployRoot -Force | Out-Null
+if (Test-Path $techRoot) {
+    Remove-Item $techRoot -Recurse -Force
+}
+if (Test-Path $singleZip) {
+    Remove-Item $singleZip -Force
+}
 
 Get-ChildItem -Path $deployRoot -Force -ErrorAction SilentlyContinue | Where-Object {
-    $_.Name -like "Mikrotom_Wariant_B_*"
+    $_.Name -like "Mikrotom_Wariant_B_Pakiet_*"
 } | Remove-Item -Recurse -Force
+
+New-Item -ItemType Directory -Path $techRoot -Force | Out-Null
 
 function Write-AsciiFile {
     param(
@@ -62,6 +72,18 @@ function Copy-Relative {
     }
 
     Copy-Item $sourcePath $destinationPath -Recurse -Force
+}
+
+function Copy-RelativeIfPresent {
+    param(
+        [string]$Source,
+        [string]$TargetRoot
+    )
+
+    $sourcePath = Join-Path $root $Source
+    if (Test-Path $sourcePath) {
+        Copy-Relative -Source $Source -TargetRoot $TargetRoot
+    }
 }
 
 function Copy-McuArtifacts {
@@ -369,6 +391,7 @@ pause
 $docEntries = @(
     "docs\START_HERE_Wariant_B.txt",
     "docs\Karta_Operatora_A4_Wariant_B.html",
+    "docs\Porownanie_Stary_vs_Nowy_Soft.md",
     "docs\Wariant_B_Przewodnik_Kompletny.html",
     "docs\Wariant_B_Instalacja_i_Pierwsze_Uruchomienie.md",
     "docs\Wariant_B_Manual_Uzytkownika_GUI.md",
@@ -376,6 +399,11 @@ $docEntries = @(
     "docs\Pakiety_Wdrozeniowe_Wariant_B.md",
     "docs\HMI_Protocol.md",
     "docs\images"
+)
+
+$optionalDocEntries = @(
+    "docs\Pakiety_Wdrozeniowe_Wariant_B.pdf",
+    "docs\Porownanie_Stary_vs_Nowy_Soft.pdf"
 )
 
 $pcEntries = @(
@@ -424,6 +452,11 @@ foreach ($entry in $mcuCommonEntries) { Copy-Relative -Source $entry -TargetRoot
 foreach ($entry in $mcuCommonEntries) { Copy-Relative -Source $entry -TargetRoot $mcuMotionDir }
 foreach ($entry in $fullEntries) { Copy-Relative -Source $entry -TargetRoot $fullDir }
 foreach ($entry in $docEntries) { Copy-Relative -Source $entry -TargetRoot $docsDir }
+foreach ($entry in $optionalDocEntries) { Copy-RelativeIfPresent -Source $entry -TargetRoot $pcDir }
+foreach ($entry in $optionalDocEntries) { Copy-RelativeIfPresent -Source $entry -TargetRoot $mcuSafeDir }
+foreach ($entry in $optionalDocEntries) { Copy-RelativeIfPresent -Source $entry -TargetRoot $mcuMotionDir }
+foreach ($entry in $optionalDocEntries) { Copy-RelativeIfPresent -Source $entry -TargetRoot $fullDir }
+foreach ($entry in $optionalDocEntries) { Copy-RelativeIfPresent -Source $entry -TargetRoot $docsDir }
 
 Copy-McuArtifacts -TargetRoot $mcuSafeDir -Variant safe
 Copy-McuArtifacts -TargetRoot $mcuMotionDir -Variant motion
@@ -431,6 +464,7 @@ Copy-McuArtifacts -TargetRoot $fullDir -Variant all
 
 Get-ChildItem -Path $deployRoot -Recurse -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force
 Get-ChildItem -Path $deployRoot -Recurse -File -Include "*.pyc" | Remove-Item -Force
+Get-ChildItem -Path $deployRoot -Recurse -File -Include "*.sqlite3", "*.sqlite3-shm", "*.sqlite3-wal" | Remove-Item -Force
 
 Add-PcLaunchers -TargetRoot $pcDir
 Add-McuSafeLaunchers -TargetRoot $mcuSafeDir
@@ -495,6 +529,7 @@ To archiwum zawiera komplet instrukcji:
 - instalacja i pierwsze uruchomienie,
 - instrukcja GUI,
 - checklista bring-up,
+- tabelaryczne porownanie starego i nowego softu,
 - przewodnik HTML,
 - karta operatora A4,
 - zrzuty ekranow,
@@ -525,9 +560,12 @@ Compress-Archive -Path (Join-Path $mcuSafeDir "*") -DestinationPath "$mcuSafeDir
 Compress-Archive -Path (Join-Path $mcuMotionDir "*") -DestinationPath "$mcuMotionDir.zip" -Force
 Compress-Archive -Path (Join-Path $docsDir "*") -DestinationPath "$docsDir.zip" -Force
 Compress-Archive -Path (Join-Path $fullDir "*") -DestinationPath "$fullDir.zip" -Force
+Copy-Item "$fullDir.zip" $singleZip -Force
 
 Write-Host ""
 Write-Host "Variant B deployment packages created:"
+Write-Host "  Main package: $singleZip"
+Write-Host "  Technical variants root: $techRoot"
 Write-Host "  $pcDir.zip"
 Write-Host "  $mcuSafeDir.zip"
 Write-Host "  $mcuMotionDir.zip"

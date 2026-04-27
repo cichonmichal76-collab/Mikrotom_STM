@@ -45,7 +45,7 @@ independent channels of a multi-UART USB adapter.
 ## Electrical layer
 
 - UART TTL, point-to-point
-- default link settings: `115200`, `8N1`
+- default link settings for the current STM32 build: `115200`, `8N1`
 - one owner per UART channel
 - common `GND` is mandatory
 - HMI power should be provided by a proper `5V` supply, not from a weak UART
@@ -118,6 +118,9 @@ Supported names in the current firmware:
 - `CONFIG_LOADED`
 - `SAFE_INTEGRATION`
 - `MOTION_IMPLEMENTED`
+- `FIRST_MOVE_TEST_ACTIVE`
+- `FIRST_MOVE_MAX_DELTA`
+- `TELEMETRY_ENABLED`
 - `POS`
 - `VBUS`
 - `VBUS_VALID`
@@ -133,6 +136,7 @@ GET RUN_ALLOWED
 GET CONFIG_LOADED
 GET VBUS
 GET VBUS_VALID
+GET FIRST_MOVE_TEST_ACTIVE
 GET VERSION
 ```
 
@@ -210,6 +214,7 @@ SET CONFIG COMMISSION_STAGE 3
 SET CONFIG BRAKE_INSTALLED 1
 SET CONFIG IGNORE_BRAKE_FEEDBACK 0
 SET CONFIG ALLOW_MOTION_WITHOUT_CALIBRATION 0
+SET CONFIG TELEMETRY_ENABLED 1
 ```
 
 ### 6. Operator commands
@@ -229,6 +234,7 @@ Current verbs:
 - `QSTOP`
 - `ACK_FAULT`
 - `CALIB_ZERO`
+- `FIRST_MOVE_REL <delta_um>`
 - `MOVE_REL <delta_um>`
 - `MOVE_ABS <target_um>`
 
@@ -241,6 +247,7 @@ CMD STOP
 CMD QSTOP
 CMD ACK_FAULT
 CMD CALIB_ZERO
+CMD FIRST_MOVE_REL 50
 CMD MOVE_REL 100
 CMD MOVE_ABS 2500
 ```
@@ -370,6 +377,7 @@ Recommended mapping from HMI buttons/widgets to packets:
 - QStop button -> `CMD QSTOP`
 - Ack fault button -> `CMD ACK_FAULT`
 - Calibrate zero button -> `CMD CALIB_ZERO`
+- First move wizard button -> `CMD FIRST_MOVE_REL <delta_um>`, expected only in Etap 2 and limited to 100 um by firmware
 - Move relative widget -> `CMD MOVE_REL <delta_um>`
 - Move absolute widget -> `CMD MOVE_ABS <target_um>`
 - Commissioning stage selector -> `SET CONFIG COMMISSION_STAGE <1|2|3>`

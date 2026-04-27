@@ -90,16 +90,62 @@ volatile float czasTrajektorii;
 #endif
 static uint8_t g_homing_sequence_active = 0u;
 static uint8_t g_homing_request_pending = 0u;
+#if !APP_SAFE_INTEGRATION
+static uint8_t g_motion_outputs_active = 0u;
+static uint8_t g_align_zero_active = 0u;
+static uint32_t g_align_zero_start_ms = 0u;
+#define ALIGN_ZERO_VQ_REF 0.40f
+#define ALIGN_ZERO_DURATION_MS 350u
+#endif
 
 static void MotionOutputs_Disable(void)
 {
     foc.id_ref = 0.0f;
     foc.iq_ref = 0.0f;
+    foc.id = 0.0f;
+    foc.iq = 0.0f;
+    foc.ialfa = 0.0f;
+    foc.ibeta = 0.0f;
     foc.vd_ref = 0.0f;
     foc.vq_ref = 0.0f;
     foc.vel_ref = 0.0f;
     FOC_SetPWMduty((FieldOrientedControl*)&foc, 0u, 0u, 0u);
+
+#if !APP_SAFE_INTEGRATION
+    if (g_motion_outputs_active)
+    {
+        HAL_TIMEx_PWMN_Stop_IT(&htim1, TIM_CHANNEL_3);
+        HAL_TIM_PWM_Stop_IT(&htim1, TIM_CHANNEL_3);
+        HAL_TIMEx_PWMN_Stop_IT(&htim1, TIM_CHANNEL_2);
+        HAL_TIM_PWM_Stop_IT(&htim1, TIM_CHANNEL_2);
+        HAL_TIMEx_PWMN_Stop_IT(&htim1, TIM_CHANNEL_1);
+        HAL_TIM_PWM_Stop_IT(&htim1, TIM_CHANNEL_1);
+        g_motion_outputs_active = 0u;
+    }
+#endif
 }
+
+#if !APP_SAFE_INTEGRATION
+static uint8_t MotionOutputs_Enable(void)
+{
+    uint16_t zero_vector_pwm = (uint16_t)(TIM1->ARR / 2u);
+
+    if (g_motion_outputs_active)
+        return 1u;
+
+    FOC_SetPWMduty((FieldOrientedControl*)&foc, zero_vector_pwm, zero_vector_pwm, zero_vector_pwm);
+    g_motion_outputs_active = 1u;
+
+    if (HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_1) != HAL_OK) { MotionOutputs_Disable(); return 0u; }
+    if (HAL_TIMEx_PWMN_Start_IT(&htim1, TIM_CHANNEL_1) != HAL_OK) { MotionOutputs_Disable(); return 0u; }
+    if (HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_2) != HAL_OK) { MotionOutputs_Disable(); return 0u; }
+    if (HAL_TIMEx_PWMN_Start_IT(&htim1, TIM_CHANNEL_2) != HAL_OK) { MotionOutputs_Disable(); return 0u; }
+    if (HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_3) != HAL_OK) { MotionOutputs_Disable(); return 0u; }
+    if (HAL_TIMEx_PWMN_Start_IT(&htim1, TIM_CHANNEL_3) != HAL_OK) { MotionOutputs_Disable(); return 0u; }
+
+    return 1u;
+}
+#endif
 
 #if !APP_SAFE_INTEGRATION
 static int32_t MotionControl_MToUm(float position_m)
@@ -148,6 +194,54 @@ static void MotionControl_UpdateHomingState(void)
         MotionOutputs_Disable();
     }
 }
+
+static void MotionControl_SyncZeroPosition(void)
+{
+    __disable_irq();
+    ResetZeroPosition((MotorState*)&state);
+    traj.start_pos_m = state.pos_m;
+    traj.dest_pos_m = state.pos_m;
+    traj.traj_dist_m = 0.0f;
+    traj.T_traj_s = 0.0f;
+    traj.a_m_s2 = 0.0f;
+    traj.a_set_m_s2 = 0.0f;
+    traj.pos_set_m = state.pos_m;
+    traj.vel_set_m_s = 0.0f;
+    traj.t_elapsed_s = 0.0f;
+    traj.traj_done = 1;
+    state.pos_set_m = state.pos_m;
+    state.vel_set_m_s = 0.0f;
+    __enable_irq();
+}
+
+static void MotionControl_UpdateAlignZeroState(void)
+{
+    if (!g_align_zero_active)
+        return;
+
+    if (Fault_IsActive())
+    {
+        g_align_zero_active = 0u;
+        state.enabled = 0u;
+        MotionOutputs_Disable();
+        AxisControl_NotifyCalibrationComplete(0u);
+        return;
+    }
+
+    if ((HAL_GetTick() - g_align_zero_start_ms) < ALIGN_ZERO_DURATION_MS)
+        return;
+
+    MotionControl_SyncZeroPosition();
+    Calibration_SetZeroPosUm(0);
+    Calibration_SetValid(1u);
+    state.calibrated = 1u;
+    g_align_zero_active = 0u;
+    state.enabled = 0u;
+    MotionOutputs_Disable();
+    EventLog_Push(EVT_CALIB_OK, 0);
+    AxisControl_NotifyCalibrationComplete(1u);
+    (void)ConfigStore_Save();
+}
 #endif
 
 static void MotionControl_UpdateExternalInterlock(void)
@@ -162,6 +256,7 @@ static void MotionControl_UpdateExternalInterlock(void)
     {
         g_homing_request_pending = 0u;
         g_homing_sequence_active = 0u;
+        g_align_zero_active = 0u;
         state.enabled = 0u;
         Fault_Set(FAULT_ESTOP);
         MotionOutputs_Disable();
@@ -172,7 +267,7 @@ static void MotionControl_UpdateExternalInterlock(void)
 static void MotionControl_UpdateOutputInhibit(void)
 {
 #if !APP_SAFE_INTEGRATION
-    if (g_homing_sequence_active)
+    if (g_homing_sequence_active || g_align_zero_active)
         return;
 
     if (Fault_IsActive() || !state.enabled ||
@@ -196,6 +291,35 @@ uint8_t MotionControl_RequestHoming(void)
     if (state.HomingSuccessful) return 1u;
 
     g_homing_request_pending = 1u;
+    AxisState_Set(AXIS_CALIBRATION);
+    EventLog_Push(EVT_CALIB_START, 0);
+    return 1u;
+#endif
+}
+
+uint8_t MotionControl_RequestAlignZero(void)
+{
+#if APP_SAFE_INTEGRATION
+    return 0u;
+#else
+    if (Fault_IsActive()) return 0u;
+    if (!SafetyMonitor_PowerReady((const volatile MotorState*)&state)) return 0u;
+    if (g_homing_sequence_active || g_homing_request_pending || g_align_zero_active) return 0u;
+    if (state.enabled || state.HomingOngoing || (AxisState_Get() == AXIS_MOTION)) return 0u;
+    if (Commissioning_GetStage() < 2u) return 0u;
+    if (Commissioning_SafeMode()) return 0u;
+    if (!Commissioning_ArmingOnly()) return 0u;
+    if (Commissioning_ControlledMotion()) return 0u;
+
+    MotionControl_SyncZeroPosition();
+    Calibration_SetValid(0u);
+    state.calibrated = 0u;
+    state.enabled = 1u;
+    g_align_zero_start_ms = HAL_GetTick();
+    g_align_zero_active = 1u;
+    foc.FocState = foc_PosOpenLoop;
+    foc.OpenLoopPositionTheta = 0.0f;
+    foc.vq_ref = ALIGN_ZERO_VQ_REF;
     AxisState_Set(AXIS_CALIBRATION);
     EventLog_Push(EVT_CALIB_START, 0);
     return 1u;
@@ -291,6 +415,8 @@ int main(void)
     Protocol_Init();
 
     ConfigStore_Load();
+    Commissioning_SetStage(1u);
+    Commissioning_SetSafeMode(1u);
     state.maxcurrent = Limits_Get()->max_current_peak_A;
     EventLog_Push(EVT_BOOT, 0);
     AxisControl_RefreshState();
@@ -299,12 +425,7 @@ int main(void)
     HAL_OPAMP_Start(&hopamp2);
 
 #if !APP_SAFE_INTEGRATION
-    HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_1);
-    HAL_TIMEx_PWMN_Start_IT(&htim1, TIM_CHANNEL_1);
-    HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_2);
-    HAL_TIMEx_PWMN_Start_IT(&htim1, TIM_CHANNEL_2);
-    HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_3);
-    HAL_TIMEx_PWMN_Start_IT(&htim1, TIM_CHANNEL_3);
+    MotionOutputs_Disable();
     EncoderStart(0);
 #endif
 
@@ -331,6 +452,7 @@ int main(void)
             FOC_MotorHomeStart((MotorState*)&state, (FieldOrientedControl*)&foc);
         }
         MotionControl_UpdateHomingState();
+        MotionControl_UpdateAlignZeroState();
 #endif
         Protocol_Process();
         MotionControl_UpdateOutputInhibit();
@@ -378,19 +500,27 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc)
         Trajectory_Update((MotorTrajectory*)&traj, state.dt_s);
 #endif
 
+#if !APP_SAFE_INTEGRATION
+        uint8_t calibration_sequence_active = (uint8_t)(g_homing_sequence_active || g_align_zero_active);
+#else
+        uint8_t calibration_sequence_active = g_homing_sequence_active;
+#endif
         if (SafetyMonitor_UpdateRt((const volatile MotorState*)&state,
                                    (const volatile MotorTrajectory*)&traj,
-                                   g_homing_sequence_active))
+                                   calibration_sequence_active))
         {
             state.enabled = 0u;
             g_homing_request_pending = 0u;
             g_homing_sequence_active = 0u;
+#if !APP_SAFE_INTEGRATION
+            g_align_zero_active = 0u;
+#endif
             MotionOutputs_Disable();
             return;
         }
 
 #if !APP_SAFE_INTEGRATION
-        if (!g_homing_sequence_active)
+        if (!g_homing_sequence_active && !g_align_zero_active)
             AxisControl_UpdateRt();
 #else
         AxisControl_UpdateRt();
@@ -409,12 +539,30 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc)
         Telemetry_Sample(&t);
 
 #if !APP_SAFE_INTEGRATION
-        if (!g_homing_sequence_active && !AxisControl_RunAllowed())
+        if (!g_homing_sequence_active && !g_align_zero_active && !AxisControl_RunAllowed())
         {
-            state.enabled = 0u;
             MotionOutputs_Disable();
             return;
         }
+        if (!MotionOutputs_Enable())
+        {
+            state.enabled = 0u;
+            Fault_Set(FAULT_CONFIG_INVALID);
+            MotionOutputs_Disable();
+            return;
+        }
+
+        if (g_align_zero_active)
+        {
+            foc.FocState = foc_PosOpenLoop;
+            foc.OpenLoopPositionTheta = 0.0f;
+            foc.vq_ref = ALIGN_ZERO_VQ_REF;
+        }
+        else if (!g_homing_sequence_active && (AxisState_Get() == AXIS_MOTION))
+        {
+            foc.FocState = foc_PosReg;
+        }
+
         switch (foc.FocState) {
             case foc_PosReg:
                 FOC_PositionRegulation((FieldOrientedControl*)&foc, (MotorState*)&state, (MotorTrajectory*)&traj, (PID_Controller_t*)&vd_pid, (PID_Controller_t*)&vq_pid, (PID_Controller_t*)&vel_pid, (PID_Controller_t*)&pos_pid);

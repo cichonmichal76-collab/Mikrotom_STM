@@ -54,6 +54,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 uint8_t MotionControl_RequestHoming(void);
+uint8_t MotionControl_RequestAlignZero(void);
 
 /* USER CODE END EFP */
 

@@ -874,6 +874,65 @@ body.theme-light .api-method {
   line-height: 1.15;
 }
 
+.wizard-panel {
+  padding: 22px;
+}
+
+.wizard-steps {
+  display: grid;
+  gap: 12px;
+}
+
+.wizard-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--row-surface);
+}
+
+.wizard-step.ok {
+  border-color: rgba(41, 194, 114, 0.42);
+  background: rgba(41, 194, 114, 0.08);
+}
+
+.wizard-step.pending {
+  border-color: rgba(240, 181, 74, 0.28);
+}
+
+.wizard-index {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(91, 140, 255, 0.16);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.wizard-step p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.wizard-step b {
+  min-width: 72px;
+  text-align: right;
+}
+
+.wizard-actions {
+  padding: 22px;
+}
+
+.wizard-button-row {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
 .readonly {
   opacity: 0.86;
 }

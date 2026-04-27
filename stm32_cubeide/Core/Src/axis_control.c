@@ -15,8 +15,23 @@
 extern volatile MotorState state;
 extern volatile MotorTrajectory traj;
 
-static AxisState_t axis_control_idle_state(void);
+#define AXIS_FIRST_MOVE_MAX_DELTA_UM 100
+#define AXIS_FIRST_MOVE_SETTLE_ERROR_UM 5
+#define AXIS_FIRST_MOVE_SETTLE_TICKS 10000u
 
+static AxisState_t axis_control_idle_state(void);
+static uint8_t g_first_move_test_active = 0u;
+static int32_t g_first_move_target_um = 0;
+static uint32_t g_first_move_settle_ticks = 0u;
+
+static void axis_first_move_reset(void)
+{
+    g_first_move_test_active = 0u;
+    g_first_move_target_um = (int32_t)state.pos_um;
+    g_first_move_settle_ticks = 0u;
+}
+
+#if APP_MOTION_IMPLEMENTED
 static float axis_control_compute_move_time_s(float distance_m)
 {
     const Limits_t *limits = Limits_Get();
@@ -66,6 +81,7 @@ static uint8_t axis_control_start_move_um(int32_t target_um)
     AxisState_Set(AXIS_MOTION);
     return 1u;
 }
+#endif
 
 static uint8_t axis_preconditions_ok(void)
 {
@@ -79,6 +95,30 @@ static uint8_t axis_preconditions_ok(void)
     if (!Calibration_IsValid() && !s->allow_motion_without_calibration) return 0u;
     return 1u;
 }
+
+#if APP_MOTION_IMPLEMENTED
+static int32_t axis_abs_i32(int32_t value)
+{
+    if (value == INT32_MIN)
+        return INT32_MAX;
+    return (value < 0) ? -value : value;
+}
+
+static uint8_t axis_first_move_preconditions_ok(void)
+{
+    const SafetyConfig_t *s = SafetyConfig_Get();
+
+    if (Fault_IsActive()) return 0u;
+    if (Commissioning_SafeMode()) return 0u;
+    if (!Commissioning_ArmingOnly()) return 0u;
+    if (Commissioning_ControlledMotion()) return 0u;
+    if (!SafetyMonitor_PowerReady((const volatile MotorState*)&state)) return 0u;
+    if (!state.enabled) return 0u;
+    if (state.HomingOngoing) return 0u;
+    if (!Calibration_IsValid() && !s->allow_motion_without_calibration) return 0u;
+    return 1u;
+}
+#endif
 
 static AxisState_t axis_control_idle_state(void)
 {
@@ -113,6 +153,15 @@ void AxisControl_RefreshState(void)
 
 uint8_t AxisControl_RunAllowed(void)
 {
+#if APP_MOTION_IMPLEMENTED
+    if (g_first_move_test_active)
+    {
+        AxisState_t axis_state = AxisState_Get();
+        if (!axis_first_move_preconditions_ok()) return 0u;
+        return ((axis_state == AXIS_ARMED) || (axis_state == AXIS_MOTION)) ? 1u : 0u;
+    }
+#endif
+
     if (!axis_preconditions_ok()) return 0u;
     if (!AxisState_CanMove()) return 0u;
     if (!state.enabled) return 0u;
@@ -131,6 +180,7 @@ uint8_t AxisControl_Enable(void)
 
 uint8_t AxisControl_Disable(void)
 {
+    axis_first_move_reset();
     state.enabled = 0u;
     AxisState_Set(AXIS_SAFE);
     EventLog_Push(EVT_DISABLE, 0);
@@ -139,6 +189,7 @@ uint8_t AxisControl_Disable(void)
 
 uint8_t AxisControl_Stop(void)
 {
+    axis_first_move_reset();
     traj.traj_done = 1;
     traj.dest_pos_m = state.pos_m;
     traj.pos_set_m = state.pos_m;
@@ -153,6 +204,7 @@ uint8_t AxisControl_Stop(void)
 
 uint8_t AxisControl_QStop(void)
 {
+    axis_first_move_reset();
     traj.traj_done = 1;
     traj.dest_pos_m = state.pos_m;
     traj.pos_set_m = state.pos_m;
@@ -195,6 +247,45 @@ uint8_t AxisControl_MoveAbsUm(int32_t target_um)
 #endif
 }
 
+uint8_t AxisControl_FirstMoveRelUm(int32_t delta_um)
+{
+#if !APP_MOTION_IMPLEMENTED
+    (void)delta_um;
+    return 0u;
+#else
+    int32_t current_pos;
+    int64_t target_wide;
+    int32_t target;
+
+    if (delta_um == 0) return 0u;
+    if (axis_abs_i32(delta_um) > AXIS_FIRST_MOVE_MAX_DELTA_UM) return 0u;
+    if (!axis_first_move_preconditions_ok()) return 0u;
+
+    current_pos = (int32_t)state.pos_um;
+    target_wide = (int64_t)current_pos + (int64_t)delta_um;
+    if ((target_wide < (int64_t)INT32_MIN) || (target_wide > (int64_t)INT32_MAX))
+        return 0u;
+
+    target = (int32_t)target_wide;
+    g_first_move_test_active = 1u;
+    g_first_move_target_um = target;
+    g_first_move_settle_ticks = 0u;
+    if (!axis_control_start_move_um(target))
+    {
+        axis_first_move_reset();
+        return 0u;
+    }
+
+    EventLog_Push(EVT_FIRST_MOVE_TEST, delta_um);
+    return 1u;
+#endif
+}
+
+uint8_t AxisControl_FirstMoveTestActive(void)
+{
+    return g_first_move_test_active;
+}
+
 void AxisControl_NotifyConfigChanged(void)
 {
     AxisState_t current = AxisState_Get();
@@ -220,6 +311,7 @@ void AxisControl_UpdateRt(void)
 {
     if (Fault_IsActive())
     {
+        axis_first_move_reset();
         state.enabled = 0u;
         traj.traj_done = 1;
         traj.dest_pos_m = state.pos_m;
@@ -230,6 +322,47 @@ void AxisControl_UpdateRt(void)
         AxisState_Set(AXIS_FAULT);
         return;
     }
+
+#if APP_MOTION_IMPLEMENTED
+    if (g_first_move_test_active &&
+        (AxisState_Get() == AXIS_MOTION) &&
+        traj.traj_done)
+    {
+        int32_t position_error_um = g_first_move_target_um - (int32_t)state.pos_um;
+        float target_m = ((float)g_first_move_target_um) * 1e-6f;
+
+        if (!axis_first_move_preconditions_ok())
+        {
+            axis_first_move_reset();
+            traj.dest_pos_m = state.pos_m;
+            traj.pos_set_m = state.pos_m;
+            traj.vel_set_m_s = 0.0f;
+            state.pos_set_m = state.pos_m;
+            state.vel_set_m_s = 0.0f;
+            AxisState_Set(axis_control_idle_state());
+            return;
+        }
+
+        traj.dest_pos_m = target_m;
+        traj.pos_set_m = target_m;
+        traj.vel_set_m_s = 0.0f;
+        state.pos_set_m = target_m;
+        state.vel_set_m_s = 0.0f;
+
+        if ((axis_abs_i32(position_error_um) <= AXIS_FIRST_MOVE_SETTLE_ERROR_UM) ||
+            (g_first_move_settle_ticks >= AXIS_FIRST_MOVE_SETTLE_TICKS))
+        {
+            axis_first_move_reset();
+            state.enabled = 0u;
+            AxisState_Set(axis_control_idle_state());
+        }
+        else
+        {
+            g_first_move_settle_ticks++;
+        }
+        return;
+    }
+#endif
 
     if (!AxisControl_RunAllowed())
     {
@@ -255,9 +388,17 @@ void AxisControl_UpdateRt(void)
 
 void AxisControl_BackgroundTask(void)
 {
+    if (g_first_move_test_active && traj.traj_done && (AxisState_Get() != AXIS_MOTION))
+    {
+        axis_first_move_reset();
+        state.enabled = 0u;
+        AxisState_Set(axis_control_idle_state());
+        return;
+    }
+
     if (AxisState_Get() == AXIS_STOPPING)
         AxisState_Set(axis_control_idle_state());
-    if ((AxisState_Get() == AXIS_MOTION) && traj.traj_done)
+    if (!g_first_move_test_active && (AxisState_Get() == AXIS_MOTION) && traj.traj_done)
         AxisState_Set(axis_control_idle_state());
     if (AxisState_Get() == AXIS_CONFIG)
     {

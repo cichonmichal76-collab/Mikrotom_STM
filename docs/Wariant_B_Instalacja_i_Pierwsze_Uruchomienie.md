@@ -79,7 +79,7 @@ Aktualnie wdrazamy dwa warianty firmware:
 | Wariant | Co daje |
 | --- | --- |
 | `SAFE` | pelny tor komunikacji, feedback, telemetrie, logi, commissioning, komendy UART bez realnego ruchu |
-| `MOTION-ENABLED` | to samo co `SAFE`, ale dodatkowo realny `HOME`, `MOVE_REL`, `MOVE_ABS` i mozliwosc przejscia do kontrolowanego ruchu |
+| `MOTION-ENABLED` | to samo co `SAFE`, ale dodatkowo maly `FIRST_MOVE_REL`, realny `HOME`, `MOVE_REL`, `MOVE_ABS` i mozliwosc przejscia do kontrolowanego ruchu |
 
 ### Co dojdzie dalej
 
@@ -126,8 +126,9 @@ Co to oznacza w praktyce:
 - tor komunikacji i telemetrii zostaje bez zmian,
 - ruch jest odblokowany od strony implementacji,
 - homing nie startuje automatycznie po boot,
-- operator musi jawnie wyslac `CMD HOME`,
-- dopiero po HOME i spelnieniu bramek safety mozliwy jest kontrolowany ruch.
+- pierwszy test ruchu wykonuje sie jako `CMD FIRST_MOVE_REL` w Etapie 2, z limitem 100 um,
+- operator musi jawnie wyslac `CMD HOME` dopiero po potwierdzeniu malego testu,
+- po HOME i spelnieniu bramek safety mozliwy jest normalny kontrolowany ruch `MOVE_REL` / `MOVE_ABS`.
 
 To jest wariant do kolejnego kroku, po potwierdzeniu poprawnej pracy `SAFE`.
 
@@ -204,7 +205,7 @@ Opis paczek jest w `docs/Pakiety_Wdrozeniowe_Wariant_B.md`.
 Etapy 1, 2 i 3 nie sa ozdoba GUI. To wymuszona kolejnosc uruchomienia:
 
 ```text
-komunikacja -> logika safety -> HOME -> maly ruch testowy
+komunikacja -> logika safety -> Etap 2 -> CALIB_ZERO -> FIRST_MOVE_REL -> HOME -> ruch kontrolowany
 ```
 
 Ich sens jest prosty:
@@ -212,7 +213,7 @@ Ich sens jest prosty:
 - nie przechodzimy od razu do ruchu,
 - najpierw sprawdzamy feedback i faulty,
 - potem testujemy logike operatorska,
-- dopiero na koncu przygotowujemy os do pierwszego ruchu.
+- dopiero po malym tescie przygotowujemy os do pelnego HOME i normalnego ruchu.
 
 ## 9. Etap 1 - komunikacja i diagnostyka
 
@@ -254,6 +255,11 @@ Ich sens jest prosty:
 
 ## 10. Etap 2 - logika operatorska i safety
 
+Etap 2 ma dwa zastosowania:
+
+- w wariancie `SAFE` sluzy do sprawdzenia logiki operatorskiej bez ruchu,
+- w wariancie `MOTION-ENABLED` sluzy do pierwszego bardzo malego testu `FIRST_MOVE_REL`, zanim uruchomisz pelny `HOME`.
+
 ### Co ma byc fizycznie podlaczone
 
 | Element | Wymaganie |
@@ -272,12 +278,14 @@ Ich sens jest prosty:
 
 ### Co zrobic
 
-1. Wyslij `ENABLE`.
-2. Wyslij `DISABLE`.
-3. Wyslij `STOP`.
-4. Wyslij `QSTOP`.
-5. Sprawdz logi i odpowiedzi firmware.
-6. Sprawdz timeout komunikacji, jesli Agent przestanie wysylac heartbeat.
+1. W wariancie `SAFE`: wyslij `ENABLE`, `DISABLE`, `STOP`, `QSTOP` i potwierdz brak realnego ruchu.
+2. Po przejsciu na wariant `MOTION-ENABLED`: zostan w Etapie 2, bez `CONTROLLED_MOTION`.
+3. W kreatorze uruchomienia wykonaj `CALIB_ZERO`, czyli ustaw aktualna pozycje jako zero testowe.
+4. Wyslij `ENABLE`.
+5. Ustaw `FIRST_MOVE_REL` na mala wartosc, np. `50 um`, maksymalnie `100 um`.
+6. Wyslij `FIRST_MOVE_REL` i obserwuj prad, pozycje, kierunek oraz zatrzymanie.
+7. Po tescie wyslij `DISABLE` albo zostaw os w stanie bezpiecznym zgodnie z procedura.
+8. Sprawdz logi i odpowiedzi firmware.
 
 ### Jaki wynik jest poprawny
 
@@ -285,10 +293,11 @@ Ich sens jest prosty:
 - faulty i zdarzenia sa widoczne,
 - `STOP` i `QSTOP` dzialaja,
 - w wariancie `SAFE` nadal nie ma realnego ruchu.
+- w wariancie `MOTION-ENABLED` pierwszy ruch jest maly, kontrolowany i ograniczony przez firmware do 100 um.
 
-## 11. Etap 3 - przygotowanie do ruchu kontrolowanego
+## 11. Etap 3 - HOME i ruch kontrolowany
 
-To jest etap, w ktorym zaczynamy pracowac z wariantem `MOTION-ENABLED`.
+To jest etap po zaliczonym tescie `FIRST_MOVE_REL`. Dopiero tutaj przechodzimy do pelnego `HOME` i normalnych komend ruchu.
 
 ### Co ma byc fizycznie podlaczone
 
@@ -306,19 +315,22 @@ To jest etap, w ktorym zaczynamy pracowac z wariantem `MOTION-ENABLED`.
 - aktywny etap `3`,
 - konserwatywne `MAX_CURRENT`, `MAX_VELOCITY`, `MAX_ACCELERATION`,
 - potwierdzone soft limity,
-- brak niepotrzebnych override.
+- brak niepotrzebnych override,
+- potwierdzony pierwszy test `FIRST_MOVE_REL` w Etapie 2.
 
 ### Co zrobic po kolei
 
 1. Sprawdz, czy `SAFE_INTEGRATION = 0`.
 2. Sprawdz, czy `MOTION_IMPLEMENTED = 1`.
 3. Potwierdz brak aktywnego faultu.
-4. Wyslij `HOME`.
-5. Obserwuj statusy `HOMING_STARTED`, `HOMING_ONGOING`, `HOMING_SUCCESSFUL`.
-6. Gdy homing sie powiedzie, sprawdz czy `RUN_ALLOWED` moze przejsc na `1`.
-7. Wyslij bardzo maly `MOVE_REL`, na przyklad `100 um`.
-8. Potwierdz kierunek ruchu i zatrzymanie.
-9. Dopiero potem wolno przejsc do wiekszego testu.
+4. Potwierdz, ze w Etapie 2 wykonano `CALIB_ZERO`, `ENABLE` i maly `FIRST_MOVE_REL`.
+5. Przejdz do Etapu 3.
+6. Wyslij `HOME`.
+7. Obserwuj statusy `HOMING_STARTED`, `HOMING_ONGOING`, `HOMING_SUCCESSFUL`.
+8. Gdy homing sie powiedzie, sprawdz czy `RUN_ALLOWED` moze przejsc na `1`.
+9. Wyslij bardzo maly `MOVE_REL`, na przyklad `100 um`.
+10. Potwierdz kierunek ruchu i zatrzymanie.
+11. Dopiero potem wolno przejsc do wiekszego testu.
 
 ### Jaki wynik jest poprawny
 
@@ -454,7 +466,15 @@ albo:
 scripts\flash_mcu_motion_stlink.bat
 ```
 
-Po flashu przejdz do Etapu 3 i wykonaj `HOME`.
+Po flashu nie zaczynaj od `HOME`. Najpierw otworz `Kreator uruchomienia` i wykonaj:
+
+1. odswiez status,
+2. ustaw Etap 2,
+3. wykonaj `CALIB_ZERO`,
+4. wykonaj `ENABLE`,
+5. wyslij `FIRST_MOVE_REL`, np. `50 um`.
+
+Dopiero po stabilnym pierwszym tescie przejdz do Etapu 3 i wykonaj `HOME`.
 
 ## 13. Co sprawdzic przed pierwszym ruchem
 
@@ -516,9 +536,12 @@ To jest poprawne zachowanie wariantu `SAFE`.
 
 Najczestsze przyczyny:
 
-- nie wykonano `HOME`,
+- dla pierwszego testu nie wykonano jeszcze `CALIB_ZERO`,
+- dla pierwszego testu nie ustawiono Etapu 2 / `ARMING_ONLY`,
+- dla pierwszego testu wartosc `FIRST_MOVE_REL` jest poza zakresem `+/-100 um`,
+- dla normalnego ruchu po homingu nie wykonano jeszcze `HOME`,
 - aktywny fault,
-- aktywny etap inny niz `3`,
+- aktywny etap nie pasuje do typu testu: Etap 2 dla `FIRST_MOVE_REL`, Etap 3 dla ruchu po `HOME`,
 - `RUN_ALLOWED` nadal jest zablokowany przez safety.
 
 ## 15. Dokumenty powiazane
@@ -526,4 +549,5 @@ Najczestsze przyczyny:
 - `docs/Wariant_B_Manual_Uzytkownika_GUI.md`
 - `docs/STM32_Bringup_Checklist.md`
 - `docs/Pakiety_Wdrozeniowe_Wariant_B.md`
+- `docs/Porownanie_Stary_vs_Nowy_Soft.md`
 - `docs/HMI_Protocol.md`

@@ -16,5 +16,7 @@ typedef struct {
 void Telemetry_Init(void);
 void Telemetry_Sample(const TelemetrySample_t *sample);
 void Telemetry_Flush(void);
+void Telemetry_SetEnabled(uint8_t enabled);
+uint8_t Telemetry_IsEnabled(void);
 uint16_t Telemetry_Count(void);
 #endif

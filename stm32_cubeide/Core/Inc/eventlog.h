@@ -17,7 +17,8 @@ typedef enum {
     EVT_FAULT_CLEAR,
     EVT_COMM_TIMEOUT,
     EVT_OVERRIDE_ON,
-    EVT_OVERRIDE_OFF
+    EVT_OVERRIDE_OFF,
+    EVT_FIRST_MOVE_TEST
 } EventCode_t;
 typedef struct {
     uint32_t ts_ms;

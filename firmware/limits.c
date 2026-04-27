@@ -16,7 +16,7 @@ void Limits_LoadDefaults(void)
     g_limits.soft_min_pos_um = -10000;
     g_limits.soft_max_pos_um = 10000;
     g_limits.max_current_nominal_A = 0.2f;
-    g_limits.max_current_peak_A = 0.3f;
+    g_limits.max_current_peak_A = 3.0f;
     g_limits.max_velocity_m_s = 0.005f;
     g_limits.max_acceleration_m_s2 = 0.020f;
     g_limits.peak_time_ms = 200u;

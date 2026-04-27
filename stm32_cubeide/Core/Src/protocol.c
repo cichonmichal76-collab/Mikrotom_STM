@@ -255,6 +255,12 @@ static void handle_get_simple(const char *arg1)
         protocol_rsp_config_u8("SAFE_INTEGRATION", APP_SAFE_INTEGRATION ? 1u : 0u);
     else if (strcmp(arg1, "MOTION_IMPLEMENTED") == 0)
         protocol_rsp_config_u8("MOTION_IMPLEMENTED", APP_MOTION_IMPLEMENTED ? 1u : 0u);
+    else if (strcmp(arg1, "DIAG_ASSUME_COMMUNICATION_OK") == 0)
+        protocol_rsp_config_u8("DIAG_ASSUME_COMMUNICATION_OK", APP_DIAG_ASSUME_COMMUNICATION_OK ? 1u : 0u);
+    else if (strcmp(arg1, "DIAG_ASSUME_COMMAND_ACCEPTANCE_OK") == 0)
+        protocol_rsp_config_u8("DIAG_ASSUME_COMMAND_ACCEPTANCE_OK", APP_DIAG_ASSUME_COMMAND_ACCEPTANCE_OK ? 1u : 0u);
+    else if (strcmp(arg1, "DIAG_EXECUTION_FOCUS") == 0)
+        protocol_rsp_config_u8("DIAG_EXECUTION_FOCUS", APP_DIAG_EXECUTION_FOCUS ? 1u : 0u);
     else if (strcmp(arg1, "POS") == 0)
         protocol_rsp_param_i32("POS", (int32_t)state.pos_um);
     else if (strcmp(arg1, "VBUS") == 0)

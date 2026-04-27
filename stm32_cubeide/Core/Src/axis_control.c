@@ -205,7 +205,7 @@ uint8_t AxisControl_Enable(void)
 uint8_t AxisControl_Disable(void)
 {
     axis_first_move_reset();
-    state.enabled = 0u;
+    axis_control_hold_position(1u);
     AxisState_Set(AXIS_SAFE);
     EventLog_Push(EVT_DISABLE, 0);
     return 1u;
@@ -340,11 +340,7 @@ void AxisControl_UpdateRt(void)
         if (!axis_first_move_preconditions_ok())
         {
             axis_first_move_reset();
-            traj.dest_pos_m = state.pos_m;
-            traj.pos_set_m = state.pos_m;
-            traj.vel_set_m_s = 0.0f;
-            state.pos_set_m = state.pos_m;
-            state.vel_set_m_s = 0.0f;
+            axis_control_hold_position(0u);
             AxisState_Set(axis_control_idle_state());
             return;
         }

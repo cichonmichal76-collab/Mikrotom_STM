@@ -31,4 +31,24 @@
 #define APP_VBUS_MEASUREMENT_ENABLED 1
 #endif
 
+/*
+ * Current bring-up assumption: communication and command acceptance are
+ * considered validated enough to shift diagnostics toward the execution path
+ * (encoder/current/FOC/phase order). These flags do not change motion logic by
+ * themselves; they make the active diagnostic focus explicit and queryable.
+ */
+#ifndef APP_DIAG_ASSUME_COMMUNICATION_OK
+#define APP_DIAG_ASSUME_COMMUNICATION_OK 1
+#endif
+
+#ifndef APP_DIAG_ASSUME_COMMAND_ACCEPTANCE_OK
+#define APP_DIAG_ASSUME_COMMAND_ACCEPTANCE_OK 1
+#endif
+
+#if APP_DIAG_ASSUME_COMMUNICATION_OK && APP_DIAG_ASSUME_COMMAND_ACCEPTANCE_OK
+#define APP_DIAG_EXECUTION_FOCUS 1
+#else
+#define APP_DIAG_EXECUTION_FOCUS 0
+#endif
+
 #endif

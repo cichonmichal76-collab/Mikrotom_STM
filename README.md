@@ -275,6 +275,66 @@ Wniosek:
 
 Drugi pomiar potwierdza powtarzalnosc starego wsadu. Ruch, okres cyklu i poziom pradow sa stabilne, wiec branch `DZIALA` moze sluzyc jako baza do dalszego, warstwowego rozwoju bez burzenia dzialajacej logiki ruchu.
 
+## Test wsadu diagnostycznego
+
+Wsad diagnostyczny dodaje rzadsza ramke `D;...` i nie dodaje komend sterujacych po UART.
+
+Podczas pierwszego uruchomienia po wgraniu program wykonywal sie i wysylal UART, ale uklad nie ruszyl. Krotka sesja SQL `5` pokazala:
+
+- `18506` szybkich ramek,
+- `189` ramek diagnostycznych,
+- pozycja stala: `1641 .. 1641 um`,
+- predkosc: `0 .. 0 mm/s`,
+- prady fazowe tylko szumowe,
+- `vbus = 12000 mV`,
+- `homing_successful = 0`,
+- `foc_state = 3`,
+- `iq_ref = 0`, `iq = 0`, `vq_ref = 0`.
+
+Po osobnym resecie MCU uklad ruszyl. Pelna sesja SQL `6` pokazala:
+
+- `276990` szybkich ramek,
+- `2689` ramek diagnostycznych,
+- `0` blednych ramek,
+- zakres pozycji: `-9166 .. 9352 um`,
+- rozpietosc ruchu: `18518 um`,
+- predkosc: `-35 .. 37 mm/s`,
+- szacowany okres cyklu: `2094 ms`,
+- maksymalna wartosc bezwzgledna dowolnej fazy: `2492 mA`,
+- `95 percentyl` maksymalnej wartosci bezwzglednej fazy: `2317 mA`,
+- `homing_successful = 1`,
+- `foc_state = 0`,
+- `iq_ref = 1295 .. 2504 mA`,
+- `iq = 1286 .. 2501 mA`,
+- `vbus = 12000 mV`.
+
+Porownanie sesji `3` i `6`:
+
+- rozpietosc ruchu: `18516 um` -> `18518 um`, roznica `2 um`,
+- okres cyklu: `2094 ms` -> `2094 ms`, roznica `0 ms`,
+- predkosc abs p95: `31.0 mm/s` -> `31.0 mm/s`, roznica `0.0 mm/s`,
+- prad fazy p95: `2295 mA` -> `2317 mA`, roznica `22 mA`,
+- czestotliwosc szybkich ramek: `944.4 Hz` -> `923.3 Hz`, spadek okolo `2.23%`.
+
+Wniosek:
+
+Ramka diagnostyczna `D;...` nie zmienila charakteru ruchu. Ma jednak mierzalny koszt transmisji UART, bo zmniejsza liczbe szybkich ramek o okolo `2.23%`. Do dalszych prac zachowujemy ja jako przydatna diagnostyke, ale nie nalezy zwiekszac jej czestotliwosci bez potrzeby.
+
+Raporty:
+
+```text
+docs/telemetry_diagnostic_session_6.md
+docs/telemetry_comparison_session_3_vs_6.md
+docs/MCU_Flash_Procedure.md
+```
+
+Procedura wgrywania MCU zostala rozdzielona na programowanie i osobny reset:
+
+```bat
+scripts\flash_mcu_diag_stlink.bat
+scripts\reset_mcu_stlink.bat
+```
+
 ## Dziennik zmian
 
 | Data | Commit | Zmiana | Test / obserwacja | Status |
@@ -285,3 +345,4 @@ Drugi pomiar potwierdza powtarzalnosc starego wsadu. Ruch, okres cyklu i poziom 
 | 2026-04-28 | `SQL analysis` | Dodanie analizatora bazy `tools/analyze_telemetry_sql.py`. | Analiza sesji `3`: `283317` probek przez `300 s`, zakres ruchu `18.5 mm`, okres cyklu `2094 ms`, prad fazy max `2422 mA`, `0` blednych ramek. | Wzorzec zapisany |
 | 2026-04-28 | `baseline report` | Dodanie eksportu raportu Markdown z analizy SQL. | Wygenerowano `docs/telemetry_baseline_session_3.md` dla sesji `3`. Firmware MCU bez zmian. | Raport zapisany |
 | 2026-04-28 | `control comparison` | Dodanie porownania dwoch sesji SQL. | Sesja `4`: `283321` probek przez `300 s`. Roznica rozpietosci ruchu wzgledem sesji `3`: `-5 um`, okres cyklu bez zmian, prad fazy p95 `+5 mA`. Firmware MCU bez zmian. | Powtarzalnosc potwierdzona |
+| 2026-04-28 | `diag firmware test` | Wgranie wsadu z ramka diagnostyczna `D;...` i zapis procedury flash/reset. | Pierwszy start po flash nie ruszyl, bo firmware wystartowal przed poprawna sekwencja startowa homingu. Po osobnym resecie MCU sesja `6` potwierdzila ruch zgodny z baseline: roznica rozpietosci `2 um`, okres cyklu bez zmian, `2689` ramek diagnostycznych. | Diagnostyka potwierdzona |

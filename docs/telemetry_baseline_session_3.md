@@ -1,7 +1,7 @@
-# Raport bazowy telemetrii - stary dzialajacy wsad
+# Raport telemetrii - firmware DZIALA
 
-Ten raport jest punktem odniesienia dla dalszego rozwoju brancha `DZIALA`.
-Opisuje zachowanie starego, dzialajacego firmware bez wysylania komend do MCU.
+Ten raport opisuje sesje telemetryczna firmware z brancha `DZIALA`.
+Logger SQL tylko slucha UART i nie wysyla komend do MCU.
 
 ## Sesja pomiarowa
 
@@ -72,8 +72,8 @@ Opisuje zachowanie starego, dzialajacego firmware bez wysylania komend do MCU.
 
 ## Wnioski
 
-- Stary wsad pracuje powtarzalnie na krotkim odcinku okolo `18.5 mm`.
-- Efektywny zapis SQL dziala stabilnie z czestotliwoscia okolo `944 Hz`.
-- W tej sesji nie bylo ramek diagnostycznych, bo MCU nadal pracowalo na starym binarnym wsadzie bez rozszerzonej ramki `D;...`.
-- Maksymalny zaobserwowany prad fazowy wyniosl okolo `2.42 A`, a wartosc p95 okolo `2.30 A`.
-- Ten raport sluzy jako baseline do porownywania kolejnych zmian bez naruszania dzialajacego ruchu.
+- Firmware pracuje powtarzalnie na krotkim odcinku okolo `18.5 mm`.
+- Efektywny zapis SQL dziala z czestotliwoscia okolo `944.4 Hz`.
+- W tej sesji zapisano `0` ramek diagnostycznych `D;...`.
+- Maksymalny zaobserwowany prad fazowy wyniosl okolo `2.42 A`, a wartosc p95 okolo `2.29 A`.
+- Ten raport sluzy do porownywania kolejnych zmian bez naruszania dzialajacego ruchu.

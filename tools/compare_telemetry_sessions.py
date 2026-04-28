@@ -68,8 +68,8 @@ def build_markdown_report(
     lines = [
         "# Porownanie telemetrii - sesja bazowa vs kontrolna",
         "",
-        "Raport porownuje dwa pomiary wykonane na starym, dzialajacym wsadzie.",
-        "Celem jest sprawdzenie powtarzalnosci ruchu przed kolejnymi zmianami firmware.",
+        "Raport porownuje dwa pomiary wykonane na firmware z brancha `DZIALA`.",
+        "Celem jest sprawdzenie powtarzalnosci ruchu po kolejnych malych zmianach firmware.",
         "",
         "## Sesje",
         "",
@@ -118,8 +118,8 @@ def build_markdown_report(
             f"- Predkosc p95 pozostala na poziomie `{control['vel_abs_p95_mm_s']:.1f} mm/s`.",
             f"- Prad fazowy p95 zmienil sie o `{phase_p95_delta:.0f} mA`.",
             f"- Czestotliwosc zapisu SQL zmienila sie o `{sample_rate_delta:.1f} Hz`.",
-            "- Sesja kontrolna potwierdza, ze stary wsad jest dobrym punktem odniesienia do dalszych zmian warstwowych.",
-            "- W terminalu loggera dla sesji kontrolnej odnotowano `1` pominieta ramke; przy ponad `283k` probek nie wplywa to na wnioski o ruchu.",
+            "- Porownanie pokazuje, czy branch `DZIALA` pozostaje dobrym punktem odniesienia do dalszych zmian warstwowych.",
+            "- Porownanie dotyczy poprawnie sparsowanych ramek zapisanych w SQLite.",
             "",
         ]
     )

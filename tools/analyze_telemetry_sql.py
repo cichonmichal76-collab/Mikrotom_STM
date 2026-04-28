@@ -154,6 +154,39 @@ def load_session_metadata(conn: sqlite3.Connection, session_id: int) -> dict[str
         (session_id,),
     ).fetchone()[0]
     metadata["diagnostic_count"] = diag_count
+    if diag_count:
+        diag_row = conn.execute(
+            """
+            SELECT
+                MIN(vbus_mv), MAX(vbus_mv),
+                MIN(foc_state), MAX(foc_state),
+                MIN(iq_ref_ma), MAX(iq_ref_ma),
+                MIN(iq_ma), MAX(iq_ma),
+                MIN(vq_ref_mv), MAX(vq_ref_mv),
+                MIN(homing_successful), MAX(homing_successful),
+                MIN(homing_ongoing), MAX(homing_ongoing)
+            FROM diagnostic_samples
+            WHERE session_id = ?
+            """,
+            (session_id,),
+        ).fetchone()
+        diag_keys = [
+            "diag_vbus_min_mv",
+            "diag_vbus_max_mv",
+            "diag_foc_min",
+            "diag_foc_max",
+            "diag_iq_ref_min_ma",
+            "diag_iq_ref_max_ma",
+            "diag_iq_min_ma",
+            "diag_iq_max_ma",
+            "diag_vq_ref_min_mv",
+            "diag_vq_ref_max_mv",
+            "diag_homing_successful_min",
+            "diag_homing_successful_max",
+            "diag_homing_ongoing_min",
+            "diag_homing_ongoing_max",
+        ]
+        metadata.update(dict(zip(diag_keys, diag_row, strict=True)))
     return metadata
 
 
@@ -214,10 +247,10 @@ def format_markdown_report(
     turning_points = summary["turning_points"]
 
     lines = [
-        "# Raport bazowy telemetrii - stary dzialajacy wsad",
+        "# Raport telemetrii - firmware DZIALA",
         "",
-        "Ten raport jest punktem odniesienia dla dalszego rozwoju brancha `DZIALA`.",
-        "Opisuje zachowanie starego, dzialajacego firmware bez wysylania komend do MCU.",
+        "Ten raport opisuje sesje telemetryczna firmware z brancha `DZIALA`.",
+        "Logger SQL tylko slucha UART i nie wysyla komend do MCU.",
         "",
         "## Sesja pomiarowa",
         "",
@@ -261,11 +294,34 @@ def format_markdown_report(
         f"| Max abs dowolnej fazy | `{summary['phase_abs_max_ma']} mA` |",
         f"| Max abs fazy p95 | `{summary['phase_abs_p95_ma']:.0f} mA` |",
         "",
+    ]
+
+    if metadata["diagnostic_count"]:
+        lines.extend(
+            [
+                "## Diagnostyka D",
+                "",
+                "| Parametr | Wartosc |",
+                "| --- | --- |",
+                f"| VBUS | `{metadata['diag_vbus_min_mv']} .. {metadata['diag_vbus_max_mv']} mV` |",
+                f"| FOC state | `{metadata['diag_foc_min']} .. {metadata['diag_foc_max']}` |",
+                f"| iq_ref | `{metadata['diag_iq_ref_min_ma']} .. {metadata['diag_iq_ref_max_ma']} mA` |",
+                f"| iq | `{metadata['diag_iq_min_ma']} .. {metadata['diag_iq_max_ma']} mA` |",
+                f"| vq_ref | `{metadata['diag_vq_ref_min_mv']} .. {metadata['diag_vq_ref_max_mv']} mV` |",
+                f"| Homing successful | `{metadata['diag_homing_successful_min']} .. {metadata['diag_homing_successful_max']}` |",
+                f"| Homing ongoing | `{metadata['diag_homing_ongoing_min']} .. {metadata['diag_homing_ongoing_max']}` |",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
         "## Punkty zwrotne - podglad",
         "",
         "| t_ms | pos_um | vel_mm_s |",
         "| --- | --- | --- |",
-    ]
+        ]
+    )
 
     if turning_points:
         for point in turning_points:
@@ -278,11 +334,15 @@ def format_markdown_report(
             "",
             "## Wnioski",
             "",
-            "- Stary wsad pracuje powtarzalnie na krotkim odcinku okolo `18.5 mm`.",
-            "- Efektywny zapis SQL dziala stabilnie z czestotliwoscia okolo `944 Hz`.",
-            "- W tej sesji nie bylo ramek diagnostycznych, bo MCU nadal pracowalo na starym binarnym wsadzie bez rozszerzonej ramki `D;...`.",
-            "- Maksymalny zaobserwowany prad fazowy wyniosl okolo `2.42 A`, a wartosc p95 okolo `2.30 A`.",
-            "- Ten raport sluzy jako baseline do porownywania kolejnych zmian bez naruszania dzialajacego ruchu.",
+            "- Firmware pracuje powtarzalnie na krotkim odcinku okolo `18.5 mm`.",
+            f"- Efektywny zapis SQL dziala z czestotliwoscia okolo `{summary['sample_rate_hz']:.1f} Hz`.",
+            f"- W tej sesji zapisano `{metadata['diagnostic_count']}` ramek diagnostycznych `D;...`.",
+            (
+                "- Maksymalny zaobserwowany prad fazowy wyniosl okolo "
+                f"`{float(summary['phase_abs_max_ma']) / 1000.0:.2f} A`, "
+                f"a wartosc p95 okolo `{float(summary['phase_abs_p95_ma']) / 1000.0:.2f} A`."
+            ),
+            "- Ten raport sluzy do porownywania kolejnych zmian bez naruszania dzialajacego ruchu.",
             "",
         ]
     )

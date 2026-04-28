@@ -118,24 +118,65 @@ W kodzie startowym:
 1. Rdzen ruchu, FOC, homing i konfiguracja peryferiow pozostaja punktem odniesienia.
 2. Kazda zmiana musi byc mala, opisana i testowana na urzadzeniu.
 3. Po kazdym tescie sprzetowym dopisujemy obserwacje do sekcji `Dziennik zmian`.
-4. Nie dodajemy na tym etapie GUI, agenta, SQL ani rozbudowanych paczek wdrozeniowych.
-5. Dwukierunkowy UART bedzie dodawany pozniej, najpierw jako bezpieczny odczyt/status, a dopiero pozniej jako komendy ruchu.
-6. Ten branch nie jest kandydatem do merge do `main`; sluzy jako kontrolowana baza rozwojowa.
+4. Na tym etapie nie dodajemy GUI, agenta, komend ruchu ani rozbudowanych paczek wdrozeniowych.
+5. SQL jest dopuszczony tylko po stronie PC jako pasywny zapis telemetrii; firmware MCU pozostaje bez zmian.
+6. Dwukierunkowy UART bedzie dodawany pozniej, najpierw jako bezpieczny odczyt/status, a dopiero pozniej jako komendy ruchu.
+7. Ten branch nie jest kandydatem do merge do `main`; sluzy jako kontrolowana baza rozwojowa.
 
 ## Plan rozwoju
 
 Kolejne funkcje nalezy dodawac warstwowo:
 
 1. Dokumentacja stanu startowego i telemetrii.
-2. Stabilny logger telemetrii po stronie PC.
+2. Stabilny logger telemetrii po stronie PC z zapisem do SQLite.
 3. Minimalny odbiornik komend UART bez sterowania ruchem.
 4. Komendy diagnostyczne typu `PING` / `GET STATUS`.
 5. Komenda bezpiecznego zatrzymania.
 6. Dopiero pozniej parametry, commissioning i przyszle GUI.
+
+## Logger SQL telemetrii
+
+Pierwsza nowa warstwa jest pasywna i dziala tylko po stronie PC. Nie zmienia firmware MCU.
+
+Narzędzie:
+
+`tools/telemetry_sql_logger.py`
+
+Domyslnie czyta:
+
+- port: `COM6`
+- baudrate: `460800`
+- format: `Iu_mA;Iv_mA;Iw_mA;pos_um;vel_mm_s`
+
+Domyslnie zapisuje:
+
+`telemetry/mikrotom_telemetry.sqlite3`
+
+Uruchomienie:
+
+```bat
+scripts\run_telemetry_sql_logger.bat
+```
+
+Albo recznie:
+
+```bat
+python -m pip install -r requirements-pc.txt
+python tools\telemetry_sql_logger.py --port COM6 --baud 460800 --db telemetry\mikrotom_telemetry.sqlite3 --echo
+```
+
+Schemat bazy:
+
+- `sessions` - jedna sesja pomiarowa
+- `telemetry_samples` - probki telemetrii z czasem, pradami, pozycja i predkoscia
+
+Zasada bezpieczenstwa:
+
+Logger tylko slucha UART. Nie wysyla zadnych komend do MCU.
 
 ## Dziennik zmian
 
 | Data | Commit | Zmiana | Test / obserwacja | Status |
 | --- | --- | --- | --- | --- |
 | 2026-04-28 | `7f8054c` | Utworzenie czystego brancha `DZIALA` ze starym dzialajacym projektem CubeIDE. | Stary wsad byl wgrany na MCU i uklad wykonywal plynny ruch gora/dol na krotkim odcinku. Telemetria UART potwierdzona na `COM6`, `460800 8N1`. | Punkt odniesienia |
-
+| 2026-04-28 | `SQL logger` | Dodanie pasywnego loggera `UART -> SQLite` po stronie PC. | Test na `COM6`: zapisano `500` ramek do SQLite, `0` ramek blednych. Zakres z testu: `pos_um -9158 .. 2076`, `vel_mm_s 3 .. 35`. Firmware MCU bez zmian. | Potwierdzone |

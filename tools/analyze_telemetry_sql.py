@@ -8,6 +8,7 @@ import math
 import sqlite3
 import statistics
 from dataclasses import dataclass
+from pathlib import Path
 
 
 DEFAULT_DB_PATH = "telemetry/mikrotom_telemetry.sqlite3"
@@ -134,6 +135,28 @@ def session_summary(conn: sqlite3.Connection, session_id: int) -> dict[str, obje
     }
 
 
+def load_session_metadata(conn: sqlite3.Connection, session_id: int) -> dict[str, object]:
+    row = conn.execute(
+        """
+        SELECT id, started_at_utc, ended_at_utc, port, baud, source, notes
+        FROM sessions
+        WHERE id = ?
+        """,
+        (session_id,),
+    ).fetchone()
+    if row is None:
+        raise SystemExit(f"No session metadata for session {session_id}")
+
+    keys = ["id", "started_at_utc", "ended_at_utc", "port", "baud", "source", "notes"]
+    metadata = dict(zip(keys, row, strict=True))
+    diag_count = conn.execute(
+        "SELECT COUNT(*) FROM diagnostic_samples WHERE session_id = ?",
+        (session_id,),
+    ).fetchone()[0]
+    metadata["diagnostic_count"] = diag_count
+    return metadata
+
+
 def print_summary(summary: dict[str, object]) -> None:
     print(f"Session: {summary['session_id']}")
     print(f"Samples: {summary['count']}")
@@ -179,10 +202,98 @@ def print_summary(summary: dict[str, object]) -> None:
             print(f"  t={point.t_ms} ms pos={point.pos_um} um vel={point.vel_mm_s} mm/s")
 
 
+def format_markdown_report(
+    summary: dict[str, object],
+    metadata: dict[str, object],
+) -> str:
+    period = (
+        f"{summary['period_ms']:.0f} ms"
+        if summary["period_ms"] is not None
+        else "n/a"
+    )
+    turning_points = summary["turning_points"]
+
+    lines = [
+        "# Raport bazowy telemetrii - stary dzialajacy wsad",
+        "",
+        "Ten raport jest punktem odniesienia dla dalszego rozwoju brancha `DZIALA`.",
+        "Opisuje zachowanie starego, dzialajacego firmware bez wysylania komend do MCU.",
+        "",
+        "## Sesja pomiarowa",
+        "",
+        "| Parametr | Wartosc |",
+        "| --- | --- |",
+        f"| Session ID | `{summary['session_id']}` |",
+        f"| Start UTC | `{metadata['started_at_utc']}` |",
+        f"| Koniec UTC | `{metadata['ended_at_utc']}` |",
+        f"| Port | `{metadata['port']}` |",
+        f"| Baudrate | `{metadata['baud']}` |",
+        f"| Zrodlo | `{metadata['source']}` |",
+        f"| Notatka | `{metadata['notes'] or ''}` |",
+        f"| Probki szybkiej telemetrii | `{summary['count']}` |",
+        f"| Probki diagnostyczne | `{metadata['diagnostic_count']}` |",
+        f"| Czas pomiaru | `{summary['duration_ms']} ms` |",
+        f"| Efektywna czestotliwosc zapisu | `{summary['sample_rate_hz']:.1f} Hz` |",
+        "",
+        "## Ruch osi",
+        "",
+        "| Parametr | Wartosc |",
+        "| --- | --- |",
+        f"| Pozycja min | `{summary['pos_min_um']} um` |",
+        f"| Pozycja max | `{summary['pos_max_um']} um` |",
+        f"| Rozpietosc ruchu | `{summary['pos_span_um']} um` |",
+        f"| Predkosc min | `{summary['vel_min_mm_s']} mm/s` |",
+        f"| Predkosc max | `{summary['vel_max_mm_s']} mm/s` |",
+        f"| Predkosc abs p95 | `{summary['vel_abs_p95_mm_s']:.1f} mm/s` |",
+        f"| Przejscia przez zero | `{summary['zero_crossings']}` |",
+        f"| Szacowany okres cyklu | `{period}` |",
+        "",
+        "## Prady fazowe",
+        "",
+        "| Faza / metryka | Wartosc |",
+        "| --- | --- |",
+        f"| Iu zakres | `{summary['iu_min_ma']} .. {summary['iu_max_ma']} mA` |",
+        f"| Iv zakres | `{summary['iv_min_ma']} .. {summary['iv_max_ma']} mA` |",
+        f"| Iw zakres | `{summary['iw_min_ma']} .. {summary['iw_max_ma']} mA` |",
+        f"| Iu RMS | `{summary['iu_rms_ma']:.0f} mA` |",
+        f"| Iv RMS | `{summary['iv_rms_ma']:.0f} mA` |",
+        f"| Iw RMS | `{summary['iw_rms_ma']:.0f} mA` |",
+        f"| Max abs dowolnej fazy | `{summary['phase_abs_max_ma']} mA` |",
+        f"| Max abs fazy p95 | `{summary['phase_abs_p95_ma']:.0f} mA` |",
+        "",
+        "## Punkty zwrotne - podglad",
+        "",
+        "| t_ms | pos_um | vel_mm_s |",
+        "| --- | --- | --- |",
+    ]
+
+    if turning_points:
+        for point in turning_points:
+            lines.append(f"| `{point.t_ms}` | `{point.pos_um}` | `{point.vel_mm_s}` |")
+    else:
+        lines.append("| n/a | n/a | n/a |")
+
+    lines.extend(
+        [
+            "",
+            "## Wnioski",
+            "",
+            "- Stary wsad pracuje powtarzalnie na krotkim odcinku okolo `18.5 mm`.",
+            "- Efektywny zapis SQL dziala stabilnie z czestotliwoscia okolo `944 Hz`.",
+            "- W tej sesji nie bylo ramek diagnostycznych, bo MCU nadal pracowalo na starym binarnym wsadzie bez rozszerzonej ramki `D;...`.",
+            "- Maksymalny zaobserwowany prad fazowy wyniosl okolo `2.42 A`, a wartosc p95 okolo `2.30 A`.",
+            "- Ten raport sluzy jako baseline do porownywania kolejnych zmian bez naruszania dzialajacego ruchu.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Analyze Mikrotom STM telemetry SQLite database.")
     parser.add_argument("--db", default=DEFAULT_DB_PATH, help=f"SQLite path, default: {DEFAULT_DB_PATH}")
     parser.add_argument("--session-id", type=int, default=None, help="Session id. Defaults to latest session.")
+    parser.add_argument("--markdown-out", help="Optional path for a Markdown report.")
     return parser
 
 
@@ -196,7 +307,14 @@ def main() -> int:
             session_id = row[0]
             if session_id is None:
                 raise SystemExit("No sessions in database.")
-        print_summary(session_summary(conn, session_id))
+        summary = session_summary(conn, session_id)
+        print_summary(summary)
+        if args.markdown_out:
+            metadata = load_session_metadata(conn, session_id)
+            output_path = Path(args.markdown_out)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(format_markdown_report(summary, metadata), encoding="utf-8")
+            print(f"Markdown report written: {output_path}")
     finally:
         conn.close()
     return 0

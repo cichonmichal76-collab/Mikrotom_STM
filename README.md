@@ -238,6 +238,16 @@ Wniosek:
 
 Stary dzialajacy wsad pracuje powtarzalnie na krotkim odcinku okolo `18.5 mm`, z cyklem okolo `2.1 s` i pradem fazowym dochodzacym do okolo `2.4 A`.
 
+Pelny raport bazowy:
+
+`docs/telemetry_baseline_session_3.md`
+
+Raport mozna odtworzyc poleceniem:
+
+```bat
+python tools\analyze_telemetry_sql.py --db telemetry\mikrotom_telemetry.sqlite3 --session-id 3 --markdown-out docs\telemetry_baseline_session_3.md
+```
+
 ## Dziennik zmian
 
 | Data | Commit | Zmiana | Test / obserwacja | Status |
@@ -246,3 +256,4 @@ Stary dzialajacy wsad pracuje powtarzalnie na krotkim odcinku okolo `18.5 mm`, z
 | 2026-04-28 | `SQL logger` | Dodanie pasywnego loggera `UART -> SQLite` po stronie PC. | Test na `COM6`: zapisano `500` ramek do SQLite, `0` ramek blednych. Zakres z testu: `pos_um -9158 .. 2076`, `vel_mm_s 3 .. 35`. Firmware MCU bez zmian. | Potwierdzone |
 | 2026-04-28 | `diagnostic TX` | Dodanie rzadkiej ramki diagnostycznej `D;...` oraz zapisu jej do tabeli `diagnostic_samples`. | Zmiana TX-only. Stara szybka ramka `Iu;Iv;Iw;pos;vel` pozostaje bez zmian. Build CubeIDE: `0 errors`. Nie wgrywano jeszcze do MCU. | Zbudowane |
 | 2026-04-28 | `SQL analysis` | Dodanie analizatora bazy `tools/analyze_telemetry_sql.py`. | Analiza sesji `3`: `283317` probek przez `300 s`, zakres ruchu `18.5 mm`, okres cyklu `2094 ms`, prad fazy max `2422 mA`, `0` blednych ramek. | Wzorzec zapisany |
+| 2026-04-28 | `baseline report` | Dodanie eksportu raportu Markdown z analizy SQL. | Wygenerowano `docs/telemetry_baseline_session_3.md` dla sesji `3`. Firmware MCU bez zmian. | Raport zapisany |

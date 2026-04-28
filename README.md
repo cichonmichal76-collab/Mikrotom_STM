@@ -248,6 +248,33 @@ Raport mozna odtworzyc poleceniem:
 python tools\analyze_telemetry_sql.py --db telemetry\mikrotom_telemetry.sqlite3 --session-id 3 --markdown-out docs\telemetry_baseline_session_3.md
 ```
 
+Druga sesja kontrolna:
+
+- `session_id = 4`
+- czas zbierania: `300 s`
+- liczba probek: `283321`
+- efektywna czestotliwosc zapisu: `944.4 Hz`
+- logger odnotowal `1` pominieta ramke przy ponad `283k` probek
+
+Raport sesji kontrolnej:
+
+`docs/telemetry_control_session_4.md`
+
+Porownanie baseline vs kontrola:
+
+`docs/telemetry_comparison_session_3_vs_4.md`
+
+Najwazniejsze roznice sesja `3` -> `4`:
+
+- rozpietosc ruchu: `18516 um` -> `18511 um`, roznica `-5 um`,
+- okres cyklu: `2094 ms` -> `2094 ms`, roznica `0 ms`,
+- predkosc abs p95: `31.0 mm/s` -> `31.0 mm/s`, roznica `0.0 mm/s`,
+- prad fazy p95: `2295 mA` -> `2300 mA`, roznica `5 mA`.
+
+Wniosek:
+
+Drugi pomiar potwierdza powtarzalnosc starego wsadu. Ruch, okres cyklu i poziom pradow sa stabilne, wiec branch `DZIALA` moze sluzyc jako baza do dalszego, warstwowego rozwoju bez burzenia dzialajacej logiki ruchu.
+
 ## Dziennik zmian
 
 | Data | Commit | Zmiana | Test / obserwacja | Status |
@@ -257,3 +284,4 @@ python tools\analyze_telemetry_sql.py --db telemetry\mikrotom_telemetry.sqlite3 
 | 2026-04-28 | `diagnostic TX` | Dodanie rzadkiej ramki diagnostycznej `D;...` oraz zapisu jej do tabeli `diagnostic_samples`. | Zmiana TX-only. Stara szybka ramka `Iu;Iv;Iw;pos;vel` pozostaje bez zmian. Build CubeIDE: `0 errors`. Nie wgrywano jeszcze do MCU. | Zbudowane |
 | 2026-04-28 | `SQL analysis` | Dodanie analizatora bazy `tools/analyze_telemetry_sql.py`. | Analiza sesji `3`: `283317` probek przez `300 s`, zakres ruchu `18.5 mm`, okres cyklu `2094 ms`, prad fazy max `2422 mA`, `0` blednych ramek. | Wzorzec zapisany |
 | 2026-04-28 | `baseline report` | Dodanie eksportu raportu Markdown z analizy SQL. | Wygenerowano `docs/telemetry_baseline_session_3.md` dla sesji `3`. Firmware MCU bez zmian. | Raport zapisany |
+| 2026-04-28 | `control comparison` | Dodanie porownania dwoch sesji SQL. | Sesja `4`: `283321` probek przez `300 s`. Roznica rozpietosci ruchu wzgledem sesji `3`: `-5 um`, okres cyklu bez zmian, prad fazy p95 `+5 mA`. Firmware MCU bez zmian. | Powtarzalnosc potwierdzona |

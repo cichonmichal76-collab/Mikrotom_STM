@@ -335,6 +335,39 @@ scripts\flash_mcu_diag_stlink.bat
 scripts\reset_mcu_stlink.bat
 ```
 
+## UART-RX-1
+
+Pierwszy etap odbioru komend `PC -> MCU` zostal dodany w trybie tylko diagnostycznym.
+
+Zaimplementowane komendy:
+
+- `PING` -> `RSP;PONG`,
+- `GET_STATUS` -> `RSP;STATUS;pos_um;vel_mm_s;vbus_mV;foc_state;homing_successful;homing_ongoing;homing_step`,
+- `GET_VERSION` -> `RSP;VERSION;DZIALA;UART_RX_1;460800`,
+- nieznana komenda -> `RSP;ERR;UNKNOWN_CMD`.
+
+Warunek bezpieczenstwa:
+
+Komendy nie zmieniaja trajektorii, pozycji zadanej, pradu zadanego, PWM, FOC, homingu ani parametrow regulatorow.
+
+Dokumentacja:
+
+```text
+docs/UART_RX_1.md
+```
+
+Build i wgranie tej wersji:
+
+```bat
+scripts\build_mcu_uart_rx1_hex.bat
+scripts\flash_mcu_uart_rx1_stlink.bat
+scripts\reset_mcu_stlink.bat
+```
+
+Status:
+
+Kod zostal zbudowany lokalnie jako `Debug\SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1.hex`. Na moment zapisu tej dokumentacji wsad nie byl jeszcze testowany na urzadzeniu.
+
 ## Dziennik zmian
 
 | Data | Commit | Zmiana | Test / obserwacja | Status |
@@ -347,3 +380,4 @@ scripts\reset_mcu_stlink.bat
 | 2026-04-28 | `control comparison` | Dodanie porownania dwoch sesji SQL. | Sesja `4`: `283321` probek przez `300 s`. Roznica rozpietosci ruchu wzgledem sesji `3`: `-5 um`, okres cyklu bez zmian, prad fazy p95 `+5 mA`. Firmware MCU bez zmian. | Powtarzalnosc potwierdzona |
 | 2026-04-28 | `diag firmware test` | Wgranie wsadu z ramka diagnostyczna `D;...` i zapis procedury flash/reset. | Pierwszy start po flash nie ruszyl, bo firmware wystartowal przed poprawna sekwencja startowa homingu. Po osobnym resecie MCU sesja `6` potwierdzila ruch zgodny z baseline: roznica rozpietosci `2 um`, okres cyklu bez zmian, `2689` ramek diagnostycznych. | Diagnostyka potwierdzona |
 | 2026-04-28 | `future backlog` | Zapisanie pomyslu `DIAG-2` jako niezrealizowanego backlogu. | Automatyczny monitoring SQL `PASS/WARN/FAIL` zostal odlozony. Szczegoly w `future.md`. | Odlozone |
+| 2026-04-28 | `UART-RX-1` | Dodanie odbioru komend diagnostycznych `PING`, `GET_STATUS`, `GET_VERSION`. | Build `Debug` zakonczony poprawnie, wygenerowano `Debug\SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1.hex`. Brak komend ruchu. Nie wgrywano jeszcze do MCU. | Zbudowane |

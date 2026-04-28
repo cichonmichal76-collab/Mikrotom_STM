@@ -40,7 +40,24 @@ Skrypty:
 
 ```text
 scripts\flash_mcu_diag_stlink.bat
+scripts\flash_mcu_uart_rx1_stlink.bat
 scripts\reset_mcu_stlink.bat
+```
+
+## Wariant UART-RX-1
+
+Dla wersji z odbiorem komend diagnostycznych bez sterowania ruchem uzyj:
+
+```bat
+scripts\build_mcu_uart_rx1_hex.bat
+scripts\flash_mcu_uart_rx1_stlink.bat
+scripts\reset_mcu_stlink.bat
+```
+
+Plik HEX:
+
+```text
+Debug\SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1.hex
 ```
 
 ## Kroki

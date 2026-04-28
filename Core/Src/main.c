@@ -28,6 +28,7 @@
 /* USER CODE BEGIN Includes */
 #include "math.h"
 #include "stdio.h"
+#include "string.h"
 #include "motorState.h"
 #include "foc.h"
 #include "trajectory.h"
@@ -43,6 +44,15 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define UART_RX_LINE_LEN 32U
+#define UART_RESPONSE_NONE 0U
+#define UART_RESPONSE_PONG 1U
+#define UART_RESPONSE_STATUS 2U
+#define UART_RESPONSE_VERSION 3U
+#define UART_RESPONSE_ERR 4U
+
+#define FW_BRANCH_NAME "DZIALA"
+#define FW_FEATURE_NAME "UART_RX_1"
 
 /* USER CODE END PD */
 
@@ -60,6 +70,11 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+static void UART_RxStart(void);
+static void UART_RxProcessByte(uint8_t byte);
+static void UART_RxProcessLine(void);
+static uint8_t UART_TxReady(void);
+static uint8_t UART_TrySendResponse(void);
 
 /* USER CODE END PFP */
 
@@ -84,6 +99,14 @@ volatile float mojaZadPredk;
 
 volatile float mojaZadPos, pos_A, pos_B;
 volatile float czasTrajektorii;
+
+static uint8_t uart2_rx_byte;
+static char uart2_rx_line[UART_RX_LINE_LEN];
+static volatile uint8_t uart2_rx_line_pos;
+static volatile uint8_t uart2_pending_response;
+static volatile uint32_t uart2_rx_cmd_cnt;
+static volatile uint32_t uart2_rx_unknown_cnt;
+static volatile uint32_t uart2_rx_overflow_cnt;
 
 
 /* USER CODE END 0 */
@@ -129,6 +152,7 @@ int main(void)
 
   	  uartWD = 0;
   	  uartWD_Attemps = 100;
+	  UART_RxStart();
 
   	  mojZadanyPrad = 0.0;
   	  mojaZadAmpPradu = 0.0;
@@ -338,6 +362,116 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+static void UART_RxStart(void)
+{
+	HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1);
+}
+
+static uint8_t UART_TxReady(void)
+{
+	return (huart2.gState == HAL_UART_STATE_READY);
+}
+
+static void UART_RxProcessLine(void)
+{
+	if(strcmp(uart2_rx_line, "PING") == 0){
+		uart2_pending_response = UART_RESPONSE_PONG;
+		uart2_rx_cmd_cnt++;
+	}
+	else if(strcmp(uart2_rx_line, "GET_STATUS") == 0){
+		uart2_pending_response = UART_RESPONSE_STATUS;
+		uart2_rx_cmd_cnt++;
+	}
+	else if(strcmp(uart2_rx_line, "GET_VERSION") == 0){
+		uart2_pending_response = UART_RESPONSE_VERSION;
+		uart2_rx_cmd_cnt++;
+	}
+	else {
+		uart2_pending_response = UART_RESPONSE_ERR;
+		uart2_rx_unknown_cnt++;
+	}
+}
+
+static void UART_RxProcessByte(uint8_t byte)
+{
+	if(byte == '\r' || byte == '\n'){
+		if(uart2_rx_line_pos > 0U){
+			uart2_rx_line[uart2_rx_line_pos] = '\0';
+			UART_RxProcessLine();
+			uart2_rx_line_pos = 0U;
+		}
+		return;
+	}
+
+	if(uart2_rx_line_pos >= (UART_RX_LINE_LEN - 1U)){
+		uart2_rx_line_pos = 0U;
+		uart2_rx_overflow_cnt++;
+		uart2_pending_response = UART_RESPONSE_ERR;
+		return;
+	}
+
+	uart2_rx_line[uart2_rx_line_pos] = (char)byte;
+	uart2_rx_line_pos++;
+}
+
+static uint8_t UART_TrySendResponse(void)
+{
+	uint8_t response = uart2_pending_response;
+
+	if(response == UART_RESPONSE_NONE || !UART_TxReady()){
+		return 0U;
+	}
+
+	uart2_pending_response = UART_RESPONSE_NONE;
+
+	switch(response){
+		case UART_RESPONSE_PONG:
+			MessageLength = sprintf(Message, "RSP;PONG\r\n");
+			break;
+
+		case UART_RESPONSE_STATUS:
+			MessageLength = sprintf(Message,
+					"RSP;STATUS;%ld;%ld;%ld;%ld;%lu;%lu;%lu\r\n",
+					(int32_t)state.pos_um,
+					(int32_t)(state.vel_m_s*1000),
+					(int32_t)(state.Vbus*1000),
+					(int32_t)foc.FocState,
+					(unsigned long)state.HomingSuccessful,
+					(unsigned long)state.HomingOngoing,
+					(unsigned long)state.HomingStep);
+			break;
+
+		case UART_RESPONSE_VERSION:
+			MessageLength = sprintf(Message,
+					"RSP;VERSION;%s;%s;460800\r\n",
+					FW_BRANCH_NAME,
+					FW_FEATURE_NAME);
+			break;
+
+		default:
+			MessageLength = sprintf(Message, "RSP;ERR;UNKNOWN_CMD\r\n");
+			break;
+	}
+
+	HAL_UART_Transmit_IT(&huart2, (uint8_t*)Message, (uint16_t)MessageLength);
+	return 1U;
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if(huart->Instance == USART2){
+		UART_RxProcessByte(uart2_rx_byte);
+		UART_RxStart();
+	}
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+	if(huart->Instance == USART2){
+		uart2_rx_line_pos = 0U;
+		UART_RxStart();
+	}
+}
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
@@ -441,9 +575,10 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
     	}
 
     	moj_cnt++;
+	UART_TrySendResponse();
 
 		if(moj_cnt%10 == 0){
-			if(!(HAL_UART_GetState(&huart2) == HAL_UART_STATE_BUSY_TX)){
+			if(UART_TxReady()){
 			  	MessageLength = sprintf(Message,"%ld;%ld;%ld;%ld;%ld\r\n",
 			  			(int32_t)(state.current_U*1000),
 						(int32_t)(state.current_V*1000),
@@ -460,13 +595,14 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
 			if(uartWD>=(uartWD_Attemps)){
 				HAL_UART_DeInit(&huart2);
 				HAL_UART_Init(&huart2);
+				UART_RxStart();
 				uartWD = 0;
 			}
 
 		}
 
 		if(moj_cnt%1000 == 508){
-			if(!(HAL_UART_GetState(&huart2) == HAL_UART_STATE_BUSY_TX)){
+			if(UART_TxReady()){
 			  	MessageLength = sprintf(Message,
 			  			"D;%lu;%ld;%ld;%ld;%ld;%ld;%ld;%d;%ld;%ld;%ld;%ld;%ld;%ld;%ld;%lu;%lu;%lu;%lu\r\n",
 			  			(unsigned long)moj_cnt,

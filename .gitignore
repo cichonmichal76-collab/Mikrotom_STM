@@ -1,0 +1,15 @@
+Debug/
+Release/
+*.elf
+*.hex
+*.bin
+*.map
+*.list
+*.o
+*.d
+*.su
+*.cyclo
+default.size.stdout
+objects.list
+.venv/
+.pytest_cache/

@@ -366,7 +366,7 @@ scripts\reset_mcu_stlink.bat
 
 Status:
 
-Pierwszy test wersji `460800` potwierdzil normalny ruch i telemetrie TX, ale brak odpowiedzi `RSP;...` na komendy z PC. Poniewaz wczesniejsza dzialajaca wersja stanowiska uzywala `115200`, przygotowano wariant `UART_RX_1_115200` z ograniczonym strumieniem telemetrycznym.
+Pierwszy test wersji `460800` potwierdzil normalny ruch i telemetrie TX, ale brak odpowiedzi `RSP;...` na komendy z PC. Wariant `UART_RX_1_115200` zostal wgrany i potwierdzony na `COM6`: `PING`, `GET_VERSION`, `GET_STATUS` i nieznana komenda zwracaja `RSP;...`. `COM9` pokazuje telemetrie TX, ale nie sluzy jako potwierdzony kanal komend PC -> MCU.
 
 ## Dziennik zmian
 
@@ -380,4 +380,4 @@ Pierwszy test wersji `460800` potwierdzil normalny ruch i telemetrie TX, ale bra
 | 2026-04-28 | `control comparison` | Dodanie porownania dwoch sesji SQL. | Sesja `4`: `283321` probek przez `300 s`. Roznica rozpietosci ruchu wzgledem sesji `3`: `-5 um`, okres cyklu bez zmian, prad fazy p95 `+5 mA`. Firmware MCU bez zmian. | Powtarzalnosc potwierdzona |
 | 2026-04-28 | `diag firmware test` | Wgranie wsadu z ramka diagnostyczna `D;...` i zapis procedury flash/reset. | Pierwszy start po flash nie ruszyl, bo firmware wystartowal przed poprawna sekwencja startowa homingu. Po osobnym resecie MCU sesja `6` potwierdzila ruch zgodny z baseline: roznica rozpietosci `2 um`, okres cyklu bez zmian, `2689` ramek diagnostycznych. | Diagnostyka potwierdzona |
 | 2026-04-28 | `future backlog` | Zapisanie pomyslu `DIAG-2` jako niezrealizowanego backlogu. | Automatyczny monitoring SQL `PASS/WARN/FAIL` zostal odlozony. Szczegoly w `future.md`. | Odlozone |
-| 2026-04-28 | `UART-RX-1` | Dodanie odbioru komend diagnostycznych `PING`, `GET_STATUS`, `GET_VERSION`. | Wariant `460800` po wgraniu nie psul ruchu, ale nie odpowiadal na `RSP;...`. Przygotowano wariant `115200` z wolniejszym streamingiem TX. Brak komend ruchu. | Do testu |
+| 2026-04-28 | `UART-RX-1` | Dodanie odbioru komend diagnostycznych `PING`, `GET_STATUS`, `GET_VERSION`. | Wariant `460800` po wgraniu nie psul ruchu, ale nie odpowiadal na `RSP;...`. Wariant `115200` na `COM6` potwierdzil `RSP;PONG`, `RSP;VERSION`, `RSP;STATUS` i `RSP;ERR`. Brak komend ruchu. | Potwierdzone |

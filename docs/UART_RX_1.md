@@ -1,6 +1,6 @@
 # UART-RX-1 - komendy diagnostyczne bez sterowania ruchem
 
-Status: wariant `115200` przygotowany po tescie wersji `460800`.
+Status: wariant `115200` wgrany i potwierdzony na `COM6`.
 
 ## Cel
 
@@ -35,6 +35,12 @@ Uwaga:
 
 Pierwszy test wersji `460800` potwierdzil normalny ruch i telemetrie TX, ale brak odpowiedzi `RSP;...` na komendy z PC. Poniewaz wczesniejsza dzialajaca wersja stanowiska uzywala `115200`, wariant `UART-RX-1` zostal przestawiony na `115200`.
 
+Test po wgraniu wariantu `115200`:
+
+- `COM6` (`USB-Enhanced-SERIAL-A CH344`) - telemetria TX oraz odpowiedzi `RSP;...` dzialaja,
+- `COM9` (`STLink Virtual COM Port`) - widoczna telemetria TX, ale bez odpowiedzi na komendy z PC,
+- `COM5`, `COM7`, `COM8` - brak ramek telemetrycznych w tym tescie.
+
 Zmiana baudrate wymaga ograniczenia strumienia telemetrycznego:
 
 - szybka ramka `Iu;Iv;Iw;pos;vel` co `50` taktow petli TIM2,
@@ -50,6 +56,15 @@ Kazda komenda konczy sie znakiem konca linii `\r`, `\n` albo `\r\n`.
 | `GET_STATUS` | `RSP;STATUS;pos_um;vel_mm_s;vbus_mV;foc_state;homing_successful;homing_ongoing;homing_step` | Odczyt stanu diagnostycznego bez zmiany pracy napedu. |
 | `GET_VERSION` | `RSP;VERSION;DZIALA;UART_RX_1_115200;115200` | Identyfikacja wersji funkcji UART. |
 | inna komenda | `RSP;ERR;UNKNOWN_CMD` | Komenda nierozpoznana. |
+
+Potwierdzone odpowiedzi z testu na `COM6`:
+
+```text
+PING        -> RSP;PONG
+GET_VERSION -> RSP;VERSION;DZIALA;UART_RX_1_115200;115200
+GET_STATUS  -> RSP;STATUS;-7113;12;12000;0;1;0;5
+BAD_CMD     -> RSP;ERR;UNKNOWN_CMD
+```
 
 ## Implementacja
 

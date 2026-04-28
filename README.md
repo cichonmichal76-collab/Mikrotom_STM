@@ -207,6 +207,37 @@ Zasada bezpieczenstwa:
 
 Logger tylko slucha UART. Nie wysyla zadnych komend do MCU.
 
+## Wzorzec pracy starego wsadu
+
+Referencyjna sesja SQL:
+
+- `session_id = 3`
+- czas zbierania: `300 s`
+- liczba probek: `283317`
+- efektywna czestotliwosc zapisu: `944.4 Hz`
+- bledne ramki: `0`
+
+Parametry ruchu:
+
+- zakres pozycji: `-9181 .. 9335 um`
+- rozpiętość ruchu: `18516 um`, czyli okolo `18.5 mm`
+- predkosc: `-35 .. 36 mm/s`
+- `95 percentyl` predkosci bezwzglednej: `31.0 mm/s`
+- liczba przejsc przez zero: `286`
+- szacowany okres pelnego cyklu gora/dol: `2094 ms`
+
+Prady fazowe:
+
+- `Iu`: `-2395 .. 2110 mA`, RMS `1700 mA`
+- `Iv`: `-1655 .. 2422 mA`, RMS `1262 mA`
+- `Iw`: `-2307 .. 1867 mA`, RMS `1291 mA`
+- maksymalna wartosc bezwzgledna dowolnej fazy: `2422 mA`
+- `95 percentyl` maksymalnej wartosci bezwzglednej fazy: `2295 mA`
+
+Wniosek:
+
+Stary dzialajacy wsad pracuje powtarzalnie na krotkim odcinku okolo `18.5 mm`, z cyklem okolo `2.1 s` i pradem fazowym dochodzacym do okolo `2.4 A`.
+
 ## Dziennik zmian
 
 | Data | Commit | Zmiana | Test / obserwacja | Status |
@@ -214,3 +245,4 @@ Logger tylko slucha UART. Nie wysyla zadnych komend do MCU.
 | 2026-04-28 | `7f8054c` | Utworzenie czystego brancha `DZIALA` ze starym dzialajacym projektem CubeIDE. | Stary wsad byl wgrany na MCU i uklad wykonywal plynny ruch gora/dol na krotkim odcinku. Telemetria UART potwierdzona na `COM6`, `460800 8N1`. | Punkt odniesienia |
 | 2026-04-28 | `SQL logger` | Dodanie pasywnego loggera `UART -> SQLite` po stronie PC. | Test na `COM6`: zapisano `500` ramek do SQLite, `0` ramek blednych. Zakres z testu: `pos_um -9158 .. 2076`, `vel_mm_s 3 .. 35`. Firmware MCU bez zmian. | Potwierdzone |
 | 2026-04-28 | `diagnostic TX` | Dodanie rzadkiej ramki diagnostycznej `D;...` oraz zapisu jej do tabeli `diagnostic_samples`. | Zmiana TX-only. Stara szybka ramka `Iu;Iv;Iw;pos;vel` pozostaje bez zmian. Build CubeIDE: `0 errors`. Nie wgrywano jeszcze do MCU. | Zbudowane |
+| 2026-04-28 | `SQL analysis` | Dodanie analizatora bazy `tools/analyze_telemetry_sql.py`. | Analiza sesji `3`: `283317` probek przez `300 s`, zakres ruchu `18.5 mm`, okres cyklu `2094 ms`, prad fazy max `2422 mA`, `0` blednych ramek. | Wzorzec zapisany |

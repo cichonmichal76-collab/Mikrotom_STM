@@ -3,7 +3,7 @@ setlocal
 
 set "ROOT=%~dp0.."
 set "PROGRAMMER=C:\ST\STM32CubeIDE_1.19.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.win32_2.2.200.202503041107\tools\bin\STM32_Programmer_CLI.exe"
-set "HEX=%ROOT%\Debug\SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1.hex"
+set "HEX=%ROOT%\Debug\SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1_115200.hex"
 
 if not exist "%PROGRAMMER%" (
     echo ERROR: STM32_Programmer_CLI.exe not found:

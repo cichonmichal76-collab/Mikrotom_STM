@@ -50,9 +50,13 @@
 #define UART_RESPONSE_STATUS 2U
 #define UART_RESPONSE_VERSION 3U
 #define UART_RESPONSE_ERR 4U
+#define UART_FAST_TELEMETRY_DIV 50UL
+#define UART_DIAG_TELEMETRY_DIV 5000UL
+#define UART_DIAG_TELEMETRY_OFFSET 2508UL
+#define FW_UART_BAUDRATE 115200UL
 
 #define FW_BRANCH_NAME "DZIALA"
-#define FW_FEATURE_NAME "UART_RX_1"
+#define FW_FEATURE_NAME "UART_RX_1_115200"
 
 /* USER CODE END PD */
 
@@ -443,9 +447,10 @@ static uint8_t UART_TrySendResponse(void)
 
 		case UART_RESPONSE_VERSION:
 			MessageLength = sprintf(Message,
-					"RSP;VERSION;%s;%s;460800\r\n",
+					"RSP;VERSION;%s;%s;%lu\r\n",
 					FW_BRANCH_NAME,
-					FW_FEATURE_NAME);
+					FW_FEATURE_NAME,
+					(unsigned long)FW_UART_BAUDRATE);
 			break;
 
 		default:
@@ -577,7 +582,7 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
     	moj_cnt++;
 	UART_TrySendResponse();
 
-		if(moj_cnt%10 == 0){
+		if(moj_cnt%UART_FAST_TELEMETRY_DIV == 0){
 			if(UART_TxReady()){
 			  	MessageLength = sprintf(Message,"%ld;%ld;%ld;%ld;%ld\r\n",
 			  			(int32_t)(state.current_U*1000),
@@ -601,7 +606,7 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
 
 		}
 
-		if(moj_cnt%1000 == 508){
+		if(moj_cnt%UART_DIAG_TELEMETRY_DIV == UART_DIAG_TELEMETRY_OFFSET){
 			if(UART_TxReady()){
 			  	MessageLength = sprintf(Message,
 			  			"D;%lu;%ld;%ld;%ld;%ld;%ld;%ld;%d;%ld;%ld;%ld;%ld;%ld;%ld;%ld;%lu;%lu;%lu;%lu\r\n",

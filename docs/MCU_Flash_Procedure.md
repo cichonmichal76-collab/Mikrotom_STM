@@ -57,7 +57,7 @@ scripts\reset_mcu_stlink.bat
 Plik HEX:
 
 ```text
-Debug\SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1.hex
+Debug\SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1_115200.hex
 ```
 
 ## Kroki

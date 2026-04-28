@@ -6,7 +6,7 @@ set "MAKE_BIN=C:\ST\STM32CubeIDE_1.19.0\STM32CubeIDE\plugins\com.st.stm32cube.id
 set "GCC_BIN=C:\ST\STM32CubeIDE_1.19.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.0.202411081344\tools\bin"
 set "DEBUG_DIR=%ROOT%\Debug"
 set "ELF=SterownikImpulsowySilnika_109-B-G431B-ESC1.elf"
-set "HEX=SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1.hex"
+set "HEX=SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1_115200.hex"
 
 if not exist "%MAKE_BIN%\make.exe" (
     echo ERROR: make.exe not found:

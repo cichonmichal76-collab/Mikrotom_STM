@@ -1,6 +1,6 @@
 # UART-RX-1 - komendy diagnostyczne bez sterowania ruchem
 
-Status: zaimplementowane w kodzie, zbudowane, niewgrane podczas tworzenia tej dokumentacji.
+Status: wariant `115200` przygotowany po tescie wersji `460800`.
 
 ## Cel
 
@@ -26,10 +26,19 @@ Odpowiedzi korzystaja z istniejacego UART i moga jedynie chwilowo opoznic jedna 
 
 ```text
 USART2
-460800
+115200
 8N1
 COM6 na stanowisku testowym
 ```
+
+Uwaga:
+
+Pierwszy test wersji `460800` potwierdzil normalny ruch i telemetrie TX, ale brak odpowiedzi `RSP;...` na komendy z PC. Poniewaz wczesniejsza dzialajaca wersja stanowiska uzywala `115200`, wariant `UART-RX-1` zostal przestawiony na `115200`.
+
+Zmiana baudrate wymaga ograniczenia strumienia telemetrycznego:
+
+- szybka ramka `Iu;Iv;Iw;pos;vel` co `50` taktow petli TIM2,
+- ramka diagnostyczna `D;...` co `5000` taktow petli TIM2.
 
 ## Komendy
 
@@ -39,7 +48,7 @@ Kazda komenda konczy sie znakiem konca linii `\r`, `\n` albo `\r\n`.
 | --- | --- | --- |
 | `PING` | `RSP;PONG` | Test, czy MCU odbiera i odpowiada. |
 | `GET_STATUS` | `RSP;STATUS;pos_um;vel_mm_s;vbus_mV;foc_state;homing_successful;homing_ongoing;homing_step` | Odczyt stanu diagnostycznego bez zmiany pracy napedu. |
-| `GET_VERSION` | `RSP;VERSION;DZIALA;UART_RX_1;460800` | Identyfikacja wersji funkcji UART. |
+| `GET_VERSION` | `RSP;VERSION;DZIALA;UART_RX_1_115200;115200` | Identyfikacja wersji funkcji UART. |
 | inna komenda | `RSP;ERR;UNKNOWN_CMD` | Komenda nierozpoznana. |
 
 ## Implementacja
@@ -87,13 +96,13 @@ Build `Debug` zakonczony bez bledow.
 Wygenerowany plik:
 
 ```text
-Debug\SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1.hex
+Debug\SterownikImpulsowySilnika_109-B-G431B-ESC1_uart_rx1_115200.hex
 ```
 
 Rozmiar ELF po buildzie:
 
 ```text
-text = 51816
+text = 51832
 data = 468
 bss  = 3544
 ```

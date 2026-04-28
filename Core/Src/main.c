@@ -27,6 +27,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "math.h"
+#include "stdio.h"
 #include "motorState.h"
 #include "foc.h"
 #include "trajectory.h"
@@ -74,7 +75,7 @@ float theta_e, zad_vref, przyrost_theta_e;
 volatile uint32_t moj_cnt, coIleZmianaKierunku;
 
 uint32_t MessageLength;
-char Message[99];
+char Message[256];
 volatile uint32_t uartWD, uartWD_Attemps;
 
 volatile float mojZadanyPrad, mojaZadAmpPradu;
@@ -443,13 +444,13 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
 
 		if(moj_cnt%10 == 0){
 			if(!(HAL_UART_GetState(&huart2) == HAL_UART_STATE_BUSY_TX)){
-			  	MessageLength = sprintf(Message,"%d;%d;%d;%d;%d\r\n",
+			  	MessageLength = sprintf(Message,"%ld;%ld;%ld;%ld;%ld\r\n",
 			  			(int32_t)(state.current_U*1000),
 						(int32_t)(state.current_V*1000),
 						(int32_t)(state.current_W*1000),
 						(int32_t)state.pos_um,
 						(int32_t)(state.vel_m_s*1000));
-			   	HAL_UART_Transmit_IT(&huart2, Message, MessageLength);
+			   	HAL_UART_Transmit_IT(&huart2, (uint8_t*)Message, (uint16_t)MessageLength);
 				uartWD = 0;
 			}
 			else {
@@ -462,6 +463,34 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
 				uartWD = 0;
 			}
 
+		}
+
+		if(moj_cnt%1000 == 508){
+			if(!(HAL_UART_GetState(&huart2) == HAL_UART_STATE_BUSY_TX)){
+			  	MessageLength = sprintf(Message,
+			  			"D;%lu;%ld;%ld;%ld;%ld;%ld;%ld;%d;%ld;%ld;%ld;%ld;%ld;%ld;%ld;%lu;%lu;%lu;%lu\r\n",
+			  			(unsigned long)moj_cnt,
+						(int32_t)(state.Vbus*1000),
+						(int32_t)state.pos_um,
+						(int32_t)(state.vel_m_s*1000),
+						(int32_t)(traj.pos_set_m*1000000),
+						(int32_t)(traj.vel_set_m_s*1000000),
+						(int32_t)(traj.dest_pos_m*1000000),
+						traj.traj_done,
+						(int32_t)foc.FocState,
+						(int32_t)(foc.iq_ref*1000),
+						(int32_t)(foc.iq*1000),
+						(int32_t)(foc.id_ref*1000),
+						(int32_t)(foc.id*1000),
+						(int32_t)(foc.vq_ref*1000),
+						(int32_t)(state.theta_mech_rad*1000),
+						(unsigned long)state.HomingStarted,
+						(unsigned long)state.HomingOngoing,
+						(unsigned long)state.HomingSuccessful,
+						(unsigned long)state.HomingStep);
+			   	HAL_UART_Transmit_IT(&huart2, (uint8_t*)Message, (uint16_t)MessageLength);
+				uartWD = 0;
+			}
 		}
 
 		//mojZadanyPrad = mojaZadAmpPradu * sinf(10*traj.t_elapsed_s);	//zadanie sin przebiegu pradu

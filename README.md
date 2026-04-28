@@ -75,7 +75,7 @@ Nie ma jeszcze aktywnego parsera komend po stronie MCU:
 
 ## Format telemetrii
 
-Ramka tekstowa:
+Szybka ramka tekstowa pozostaje bez zmian:
 
 ```text
 Iu_mA;Iv_mA;Iw_mA;pos_um;vel_mm_s
@@ -94,6 +94,38 @@ Znaczenie pol:
 - `Iw_mA` - prad fazy W w mA
 - `pos_um` - pozycja z enkodera w um
 - `vel_mm_s` - predkosc w mm/s
+
+Rozszerzona ramka diagnostyczna ma prefiks `D` i jest wysylana rzadziej:
+
+```text
+D;loop_cnt;vbus_mV;pos_um;vel_mm_s;pos_set_um;vel_set_um_s;dest_um;traj_done;foc_state;iq_ref_mA;iq_mA;id_ref_mA;id_mA;vq_ref_mV;theta_mrad;homing_started;homing_ongoing;homing_successful;homing_step
+```
+
+Znaczenie dodatkowych pol:
+
+- `loop_cnt` - licznik petli firmware
+- `vbus_mV` - napiecie zasilania toru mocy w mV
+- `pos_set_um` - pozycja zadana trajektorii w um
+- `vel_set_um_s` - predkosc zadana trajektorii w um/s
+- `dest_um` - docelowa pozycja trajektorii w um
+- `traj_done` - flaga zakonczenia trajektorii
+- `foc_state` - aktywny tryb FOC
+- `iq_ref_mA` - zadany prad osi q w mA
+- `iq_mA` - zmierzony prad osi q w mA
+- `id_ref_mA` - zadany prad osi d w mA
+- `id_mA` - zmierzony prad osi d w mA
+- `vq_ref_mV` - zadane napiecie osi q w mV
+- `theta_mrad` - kat elektryczny z pozycji enkodera w mrad
+- `homing_started` - flaga startu homingu
+- `homing_ongoing` - flaga trwania homingu
+- `homing_successful` - flaga poprawnego homingu
+- `homing_step` - krok procedury homingu
+
+Po rozszerzeniu mozemy zbierac:
+
+- `5` pol w szybkiej ramce ruchu,
+- `19` pol w ramce diagnostycznej,
+- razem `24` wartosci telemetryczne z MCU, liczone po formatach ramek.
 
 Na stanowisku telemetria byla widoczna na:
 
@@ -168,7 +200,8 @@ python tools\telemetry_sql_logger.py --port COM6 --baud 460800 --db telemetry\mi
 Schemat bazy:
 
 - `sessions` - jedna sesja pomiarowa
-- `telemetry_samples` - probki telemetrii z czasem, pradami, pozycja i predkoscia
+- `telemetry_samples` - szybkie probki telemetrii z czasem, pradami, pozycja i predkoscia
+- `diagnostic_samples` - rzadsze probki diagnostyczne z VBUS, zadaniami trajektorii, stanem FOC i homingiem
 
 Zasada bezpieczenstwa:
 
@@ -180,3 +213,4 @@ Logger tylko slucha UART. Nie wysyla zadnych komend do MCU.
 | --- | --- | --- | --- | --- |
 | 2026-04-28 | `7f8054c` | Utworzenie czystego brancha `DZIALA` ze starym dzialajacym projektem CubeIDE. | Stary wsad byl wgrany na MCU i uklad wykonywal plynny ruch gora/dol na krotkim odcinku. Telemetria UART potwierdzona na `COM6`, `460800 8N1`. | Punkt odniesienia |
 | 2026-04-28 | `SQL logger` | Dodanie pasywnego loggera `UART -> SQLite` po stronie PC. | Test na `COM6`: zapisano `500` ramek do SQLite, `0` ramek blednych. Zakres z testu: `pos_um -9158 .. 2076`, `vel_mm_s 3 .. 35`. Firmware MCU bez zmian. | Potwierdzone |
+| 2026-04-28 | `diagnostic TX` | Dodanie rzadkiej ramki diagnostycznej `D;...` oraz zapisu jej do tabeli `diagnostic_samples`. | Zmiana TX-only. Stara szybka ramka `Iu;Iv;Iw;pos;vel` pozostaje bez zmian. Build CubeIDE: `0 errors`. Nie wgrywano jeszcze do MCU. | Zbudowane |

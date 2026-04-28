@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Log original STM32 UART telemetry into SQLite.
 
-Input frame from the working firmware:
+Fast input frame from the working firmware:
     Iu_mA;Iv_mA;Iw_mA;pos_um;vel_mm_s
+
+Optional diagnostic frame added on branch DZIALA:
+    D;cnt;vbus_mV;pos_um;vel_mm_s;pos_set_um;vel_set_um_s;dest_um;traj_done;...
 """
 
 from __future__ import annotations
@@ -38,13 +41,47 @@ class TelemetrySample:
     raw_line: str
 
 
+@dataclass(frozen=True)
+class DiagnosticSample:
+    loop_cnt: int
+    vbus_mv: int
+    pos_um: int
+    vel_mm_s: int
+    pos_set_um: int
+    vel_set_um_s: int
+    dest_um: int
+    traj_done: int
+    foc_state: int
+    iq_ref_ma: int
+    iq_ma: int
+    id_ref_ma: int
+    id_ma: int
+    vq_ref_mv: int
+    theta_mrad: int
+    homing_started: int
+    homing_ongoing: int
+    homing_successful: int
+    homing_step: int
+    raw_line: str
+
+
 def utc_now_iso() -> str:
     return dt.datetime.now(dt.UTC).isoformat(timespec="milliseconds")
 
 
-def parse_frame(line: str) -> TelemetrySample | None:
+def parse_frame(line: str) -> TelemetrySample | DiagnosticSample | None:
     raw = line.strip()
     parts = raw.split(";")
+
+    if parts and parts[0] == "D":
+        if len(parts) != 20:
+            return None
+        try:
+            values = [int(part) for part in parts[1:]]
+        except ValueError:
+            return None
+        return DiagnosticSample(*values, raw_line=raw)
+
     if len(parts) != 5:
         return None
 
@@ -95,12 +132,47 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS diagnostic_samples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            ts_utc TEXT NOT NULL,
+            t_ms INTEGER NOT NULL,
+            loop_cnt INTEGER NOT NULL,
+            vbus_mv INTEGER NOT NULL,
+            pos_um INTEGER NOT NULL,
+            vel_mm_s INTEGER NOT NULL,
+            pos_set_um INTEGER NOT NULL,
+            vel_set_um_s INTEGER NOT NULL,
+            dest_um INTEGER NOT NULL,
+            traj_done INTEGER NOT NULL,
+            foc_state INTEGER NOT NULL,
+            iq_ref_ma INTEGER NOT NULL,
+            iq_ma INTEGER NOT NULL,
+            id_ref_ma INTEGER NOT NULL,
+            id_ma INTEGER NOT NULL,
+            vq_ref_mv INTEGER NOT NULL,
+            theta_mrad INTEGER NOT NULL,
+            homing_started INTEGER NOT NULL,
+            homing_ongoing INTEGER NOT NULL,
+            homing_successful INTEGER NOT NULL,
+            homing_step INTEGER NOT NULL,
+            raw_line TEXT NOT NULL,
+            FOREIGN KEY(session_id) REFERENCES sessions(id)
+        )
+        """
+    )
+    conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_telemetry_samples_session_t_ms "
         "ON telemetry_samples(session_id, t_ms)"
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_telemetry_samples_session_pos "
         "ON telemetry_samples(session_id, pos_um)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_diagnostic_samples_session_t_ms "
+        "ON diagnostic_samples(session_id, t_ms)"
     )
     conn.commit()
 
@@ -159,6 +231,51 @@ def insert_sample(
     )
 
 
+def insert_diagnostic_sample(
+    conn: sqlite3.Connection,
+    session_id: int,
+    started_monotonic: float,
+    sample: DiagnosticSample,
+) -> None:
+    t_ms = int((time.monotonic() - started_monotonic) * 1000)
+    conn.execute(
+        """
+        INSERT INTO diagnostic_samples(
+            session_id, ts_utc, t_ms, loop_cnt, vbus_mv, pos_um, vel_mm_s,
+            pos_set_um, vel_set_um_s, dest_um, traj_done, foc_state,
+            iq_ref_ma, iq_ma, id_ref_ma, id_ma, vq_ref_mv, theta_mrad,
+            homing_started, homing_ongoing, homing_successful, homing_step, raw_line
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            session_id,
+            utc_now_iso(),
+            t_ms,
+            sample.loop_cnt,
+            sample.vbus_mv,
+            sample.pos_um,
+            sample.vel_mm_s,
+            sample.pos_set_um,
+            sample.vel_set_um_s,
+            sample.dest_um,
+            sample.traj_done,
+            sample.foc_state,
+            sample.iq_ref_ma,
+            sample.iq_ma,
+            sample.id_ref_ma,
+            sample.id_ma,
+            sample.vq_ref_mv,
+            sample.theta_mrad,
+            sample.homing_started,
+            sample.homing_ongoing,
+            sample.homing_successful,
+            sample.homing_step,
+            sample.raw_line,
+        ),
+    )
+
+
 def summarize_session(conn: sqlite3.Connection, session_id: int) -> dict[str, int | None]:
     row = conn.execute(
         """
@@ -179,8 +296,6 @@ def summarize_session(conn: sqlite3.Connection, session_id: int) -> dict[str, in
         """,
         (session_id,),
     ).fetchone()
-    keys = [description[0] for description in conn.execute("SELECT * FROM telemetry_samples LIMIT 0").description or []]
-    del keys
     columns = [
         "count",
         "pos_min",
@@ -194,7 +309,13 @@ def summarize_session(conn: sqlite3.Connection, session_id: int) -> dict[str, in
         "iw_min",
         "iw_max",
     ]
-    return dict(zip(columns, row, strict=True))
+    summary = dict(zip(columns, row, strict=True))
+    diag_count = conn.execute(
+        "SELECT COUNT(*) FROM diagnostic_samples WHERE session_id = ?",
+        (session_id,),
+    ).fetchone()[0]
+    summary["diagnostic_count"] = diag_count
+    return summary
 
 
 def run_logger(args: argparse.Namespace) -> int:
@@ -204,6 +325,7 @@ def run_logger(args: argparse.Namespace) -> int:
     session_id = create_session(conn, args.port, args.baud, args.source, args.notes)
 
     sample_count = 0
+    diagnostic_count = 0
     bad_frame_count = 0
     started = time.monotonic()
     last_commit = started
@@ -225,7 +347,7 @@ def run_logger(args: argparse.Namespace) -> int:
             while True:
                 if args.duration_s is not None and (time.monotonic() - started) >= args.duration_s:
                     break
-                if args.max_samples is not None and sample_count >= args.max_samples:
+                if args.max_samples is not None and (sample_count + diagnostic_count) >= args.max_samples:
                     break
 
                 raw_bytes = uart.readline()
@@ -233,25 +355,37 @@ def run_logger(args: argparse.Namespace) -> int:
                     continue
 
                 line = raw_bytes.decode("ascii", errors="ignore").strip()
-                sample = parse_frame(line)
-                if sample is None:
+                frame = parse_frame(line)
+                if frame is None:
                     bad_frame_count += 1
                     continue
 
-                insert_sample(conn, session_id, started, sample)
-                sample_count += 1
+                if isinstance(frame, TelemetrySample):
+                    insert_sample(conn, session_id, started, frame)
+                    sample_count += 1
+                else:
+                    insert_diagnostic_sample(conn, session_id, started, frame)
+                    diagnostic_count += 1
 
                 now = time.monotonic()
-                if sample_count % args.batch_size == 0 or (now - last_commit) >= args.commit_interval_s:
+                accepted_count = sample_count + diagnostic_count
+                if accepted_count % args.batch_size == 0 or (now - last_commit) >= args.commit_interval_s:
                     conn.commit()
                     last_commit = now
 
-                if args.echo and sample_count % args.echo_every == 0:
-                    print(
-                        f"{sample_count}: pos={sample.pos_um}um "
-                        f"vel={sample.vel_mm_s}mm/s "
-                        f"I=[{sample.iu_ma},{sample.iv_ma},{sample.iw_ma}]mA"
-                    )
+                if args.echo and accepted_count % args.echo_every == 0:
+                    if isinstance(frame, TelemetrySample):
+                        print(
+                            f"{accepted_count}: FAST pos={frame.pos_um}um "
+                            f"vel={frame.vel_mm_s}mm/s "
+                            f"I=[{frame.iu_ma},{frame.iv_ma},{frame.iw_ma}]mA"
+                        )
+                    else:
+                        print(
+                            f"{accepted_count}: DIAG pos={frame.pos_um}um "
+                            f"set={frame.pos_set_um}um vbus={frame.vbus_mv}mV "
+                            f"foc={frame.foc_state}"
+                        )
     except KeyboardInterrupt:
         print("\nStopped by user.")
     finally:
@@ -261,7 +395,8 @@ def run_logger(args: argparse.Namespace) -> int:
         conn.close()
 
     print("Summary:")
-    print(f"  samples: {summary['count']}")
+    print(f"  fast samples: {summary['count']}")
+    print(f"  diagnostic samples: {summary['diagnostic_count']}")
     print(f"  bad frames skipped: {bad_frame_count}")
     print(f"  pos_um: {summary['pos_min']} .. {summary['pos_max']}")
     print(f"  vel_mm_s: {summary['vel_min']} .. {summary['vel_max']}")
